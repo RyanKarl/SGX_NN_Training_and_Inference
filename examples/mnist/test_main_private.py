@@ -18,7 +18,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 5
+num_epochs = 4
 batch_size = 100
 learning_rate = 0.001
 
@@ -35,7 +35,7 @@ test_dataset = torchvision.datasets.MNIST(root='../../data',
 # Data loader
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, 
                                            batch_size=batch_size, 
-                                           shuffle=True)
+                                           shuffle=False)
 
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, 
                                           batch_size=batch_size, 
@@ -83,7 +83,7 @@ model = NeuralNet(input_size, hidden_size, num_classes).to(device)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)  
+optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
 
 # Train the model
 total_step = len(train_loader)
@@ -93,7 +93,7 @@ for epoch in range(num_epochs):
         images = images.reshape(-1, 28*28).to(device)
         labels = labels.to(device)
         
-        rand_mask = torch.ones(28 * 28)
+        rand_mask = torch.ones(784)
         rand_mask2 = torch.ones(500)
         #print("Random Mask: ")
         #print(rand_mask)
