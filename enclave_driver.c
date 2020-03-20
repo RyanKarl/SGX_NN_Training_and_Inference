@@ -1,3 +1,4 @@
+//gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -o enclave_driver
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -137,7 +138,7 @@ int main(int argc, char ** argv){
 
   //TODO parse file guiding inputs
   unsigned int round = 0;
-  while(!round){
+  while(1){
     int num_bytes_in = 0;
     //Get number of bytes either from file or from pipe
     if(infile_name != NULL){
@@ -152,13 +153,6 @@ int main(int argc, char ** argv){
         fprintf(stderr, "ERROR: could not read header\n");
         return 1;
       }
-      /*
-      int header_result = read(input_pipe, &num_bytes_in, sizeof(int));
-      if(header_result == -1){
-        fprintf(stderr, "ERROR reading header: %x\n", errno);
-        return 1;
-      }
-*/
       
     }
     //DEBUG
@@ -171,23 +165,27 @@ int main(int argc, char ** argv){
       fprintf(stderr, "ERROR: could not read bytes\n");
       return 1;
     }
-    
 
-    
-    /*
-    int bytes_read = read(input_pipe, input, (unsigned int) num_bytes_in);
-    */
     input[num_bytes_in] = '\0';
     //DEBUG
     fprintf(stderr, "Finished reading %s with %d bytes read\n", input, (int)strlen(input));
-    //Send output to stdout
+    //Send output - first send size
+    int output_size = num_bytes_in;
+    
+    if(!fwrite(&output_size, sizeof(output_size), 1, outstream)){
+      fprintf(stderr, "ERROR: could not write header\n");
+      return 1;
+    }
+    //DEBUG
+    fprintf(stderr, "Sent output header: %d bytes\n", (int) sizeof(output_size));
+    fprintf(stderr, "Sending output: %s\n", input);
     
     if((!fwrite(input, sizeof(char), num_bytes_in, outstream)) || fflush(outstream)){
       fprintf(stderr, "ERROR: could not write out\n");
       return 1;
     }
-    
-    //write(output_pipe, input, (unsigned int) num_bytes_in);
+    //Zero out original input
+    memset(input, 0, num_bytes_in+1);
     free(input);
     fprintf(stderr, "Finished writing\n");
     round++;
@@ -209,6 +207,7 @@ int main(int argc, char ** argv){
   if(output_sizes){
     free(output_sizes);
   }
-
+  
+  return 0;
 
 }
