@@ -1,5 +1,5 @@
 //enclave_driver.c
-//Jonathan S. Takeshita, Ryan Karl, Mark Horeni, Kathryn Hund
+//Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
 //gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -o enclave_driver
 #include <stdio.h>
@@ -124,58 +124,84 @@ int main(int argc, char ** argv){
   FILE * outstream = fdopen(output_pipe, "w");
   if(instream == NULL){
     fprintf(stderr, "ERROR: unable to open input pipe as file stream\n");
+    fflush(stderr);
     return 1;
   }
   if(outstream == NULL){
     fprintf(stderr, "ERROR: unable to open output pipe as file stream\n");
+    fflush(stderr);
     return 1;
   }
 
 
   if(sleepy){
     fprintf(stderr, "WARNING: Sleeping not yet implemented!\n");
+    fflush(stderr);
   }
 
   unsigned int * input_sizes;
   unsigned int * output_sizes;
   unsigned int num_entries;
-  if(infile_name != NULL){
+  if(infile_name != NULL){    
     num_entries = io_sizes(infile_name, &input_sizes, &output_sizes);
     if(!num_entries){
       fprintf(stderr, "ERROR: reading I/O sizes from %s failed\n", infile_name);
+      fflush(stderr);
       return 1;
     }
+    
+    //TODO implement file-based?
+    fprintf(stdout, "ERROR: file-based I/O sizes not implemented!\n");
+    return 0;
   }
 
   //Track how many rounds we go through
   unsigned int round = 0;
   while(1){
-    int num_bytes_in = 0;
+    //Shape of input data
+    int data_shape[DATA_DIMENSIONS];
     //Get number of bytes either from file or from pipe
     if(infile_name != NULL){
       fprintf(stderr, "WARNING: file input not yet tested\n");
-      num_bytes_in = (int) input_sizes[round];
+      fflush(stderr);
+      //num_bytes_in = (int) input_sizes[round];
     }
     else{
       if(verbose){
-        fprintf(stdout, "About to get header (%li bytes)\n", sizeof(int));
+        fprintf(stdout, "About to get header (%li bytes)\n", sizeof(data_shape[0]) * DATA_DIMENSIONS);
+        fflush(stdout);
       }
       
-      if(!fread(&num_bytes_in, sizeof(num_bytes_in), 1, instream)){
+      if(!fread(&data_shape, sizeof(data_shape[0]), DATA_DIMENSIONS, instream)){
         fprintf(stderr, "ERROR: could not read header\n");
+        fflush(stderr);
         return 1;
       }
     }
     
     if(verbose){
-      fprintf(stderr, "Going to read %u bytes \n", (unsigned int) num_bytes_in);
+      fprintf(stdout, "Going to read %u bytes \n", (unsigned int) (DATA_DIMENSIONS * sizeof(data_shape[0])));
+      fflush(stdout);
     }
     
     //Now we know how many bytes to receive
     //Read in data
-    char * input = malloc((unsigned int) num_bytes_in);
-    //Read un data
-    if(!fread(input, sizeof(char), num_bytes_in, instream)){
+    int num_in = 1;
+    for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
+      num_in *= data_shape[i];
+    }
+    
+    if(verbose){
+      fprintf(stdout, "Data dimensions: ");
+      for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
+        fprintf(stdout, "%d ", data_shape[i]);
+      }
+      fprintf(stdout, "\n");
+    }
+    
+    float * input = malloc((unsigned int) num_in * sizeof(float));
+    //Read in data
+    if(!fread(input, sizeof(float), num_in, instream)){
       fprintf(stderr, "ERROR: could not read bytes\n");
       return 1;
     }
@@ -185,42 +211,51 @@ int main(int argc, char ** argv){
     }
     
     //First verify data
-    if(verify_frievald(input, num_bytes_in)){
+    if(verify_frievald(input, data_shape)){
       //Frievald's algorithm failed - send back -1
-      int frievald_result = -1;
-      if(!fwrite(&frievald_result, sizeof(frievald_result), 1, outstream)){
+      int frievald_result[DATA_DIMENSIONS];
+      for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
+        frievald_result[i] = -1;
+      }
+      if(!fwrite(&frievald_result, sizeof(frievald_result[0]), DATA_DIMENSIONS, outstream)){
         fprintf(stderr, "ERROR: could not write failed verification\n");
         return 1;
       }
       if(verbose){
         fprintf(stdout, "Frievald's algorithm failed on round %d, ending program\n", round);
       }
-      //TODO ask Ryan - continue or kill program on failed verification?
       break;
-      //continue;
     }
     else{
       //Now compute activation
-      char * activation_data = NULL;
-      int activated_data_size = 0;
-      if(activate(input, num_bytes_in, &activation_data, &activated_data_size)){
+      float * activation_data = NULL;
+      int * activation_shape;
+      if(activate(input, data_shape, &activation_data, &activation_shape)){
         fprintf(stderr, "ERROR: activation failed on round %d\n", round);
         return 1;
       }
+      int activated_data_size = 1;
+      for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
+        activated_data_size *= activation_shape[i];
+      }
       
       //Send header with length
-      if(!fwrite(&activated_data_size, sizeof(activated_data_size), 1, outstream)){
+      if(!fwrite(activation_shape, sizeof(activation_shape[0]), DATA_DIMENSIONS, outstream)){
         fprintf(stderr, "ERROR: could not write header\n");
         return 1;
       }
       
       if(verbose){
-        fprintf(stdout, "Sent output header: %d bytes\n", (int) sizeof(activated_data_size));
-        fprintf(stdout, "Sending output: %d\n", activated_data_size);
+        fprintf(stdout, "Sent output header: %d bytes\n", (int) sizeof(activation_shape[0])*DATA_DIMENSIONS);
+        fprintf(stdout, "Sending %d float outputs: ", activated_data_size);
+        for(int i = 0; i < activated_data_size; i++){
+          fprintf(stdout, "%f ", activation_data[i]);
+        }
+        fprintf(stdout, "\n");
       }
       
       //Now send actual data
-      if((!fwrite(input, sizeof(char), num_bytes_in, outstream)) || fflush(outstream)){
+      if((!fwrite(activation_data, sizeof(activation_data[0]), activated_data_size, outstream)) || fflush(outstream)){
         fprintf(stderr, "ERROR: could not write out\n");
         return 1;
       }

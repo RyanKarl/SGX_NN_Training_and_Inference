@@ -1,19 +1,22 @@
 #!/usr/bin/python3
 #SPController.py
-#Jonathan S. Takeshita, Ryan Karl, Mark Horeni, Kathryn Hund
+#Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
 import subprocess
 import os
-import struct
 import sys
-from struct import *
+import struct
+import numpy as np
 
 ENCLAVE_EXE_PATH = "./enclave_driver"
 TMPDIR = "/tmp/"
 #Name is of the writer
 FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
 INT_BYTES = 4
+FLOAT_BYTES = 4
 BYTEORDER = sys.byteorder
+DATA_DIMENSIONS = 3
+STRUCT_PACK_FMT = 'f'
 
 class SPController:
 
@@ -33,30 +36,43 @@ class SPController:
     self.proc = None
 
   #Call to actually start the subprocess and open pipes
-  def start(self):
+  def start(self, verbose=False):
+    if verbose:
+      self.args.append("-v")
     self.proc = subprocess.Popen(self.args)
     self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=0) #Convert FD to pipe object
     self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=0)
     
-  #input_data is str by default (changeable if desired)
-  #Returns bytes
+  #input_data is float ndarray (3-D) by default
   def query_enclave(self, input_data, send_header=True, raw_bytes=False):
+    #Send 3 ints as shape - use nditer to go over array of floats
+    data_shape = input_data.shape
+    if len(data_shape) != DATA_DIMENSIONS:
+      print("Data shape incorrect: " + str(data_shape))
+      sys.exit(0)
     if send_header:  
-      header = len(input_data).to_bytes(INT_BYTES, byteorder=BYTEORDER)
+      header = b''
+      for dim in data_shape:
+        header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER)
       self.gpu_pipe_w.write(header)
     if not raw_bytes:
-      input_data = input_data.encode()
+      input_data = b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(input_data, order='C')])
     self.gpu_pipe_w.write(input_data)
-    response_size = -1
+    response_sizes = list()
     if send_header:
-      header_resp = self.enclave_pipe_r.read(INT_BYTES)
-      response_size = int.from_bytes(header_resp, byteorder=BYTEORDER)
+      header_resp = self.enclave_pipe_r.read(DATA_DIMENSIONS*INT_BYTES)
+      response_sizes = [int.from_bytes(header_resp[i:i+INT_BYTES], byteorder=BYTEORDER) for i in [INT_BYTES*y for y in range(DATA_DIMENSIONS)]]
     else:
       raise NotImplementedError #Need to implement this if we do file-based sizes
-    if response_size == -1:
-      return None  
-    enclave_response = self.enclave_pipe_r.read(response_size)
-    return enclave_response
+    if -1 in response_sizes:
+      print("Frievald's Algorithm failed to verify!")
+      sys.exit(0)
+    num_floats = 1
+    for d in response_sizes:
+      num_floats *= d  
+    enclave_response = self.enclave_pipe_r.read(num_floats*FLOAT_BYTES)
+    float_resp = [struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)]
+    return float_resp
     
   def close(self, force=True, cleanup=True):
     if not force:
@@ -78,15 +94,15 @@ class SPController:
     
 #An example of how to use the SubProcess Controller
 def main():
-  strings = ["Jon", "Ryan", "Taeho", "Changhao"]
+  floats = np.array([0.1*x for x in range(12)])
+  floats = np.reshape(floats, (2, 3, 2))
   spc = SPController()
   spc.start()
-  for s in strings:
-    ret = spc.query_enclave(s)
-    if ret is None:
-      print("Verification failed!")
-    else:  
-      print("Response: " + str(ret))
+  ret = spc.query_enclave(floats)
+  if ret is None:
+    print("Verification failed!")
+  else:  
+    print("Response: " + str(ret))
   spc.close()
   return  
     
