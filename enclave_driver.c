@@ -1,10 +1,11 @@
 //enclave_driver.c
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
-
 //gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -std=gnu99 -o enclave_driver
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+//<sys/types.h> used for pipes
 #include <sys/types.h>
 #include <fcntl.h> 
 #include <string.h>
@@ -72,6 +73,8 @@ unsigned int io_sizes(char * infile_name, unsigned int ** input_sizes, unsigned 
 
 int main(int argc, char ** argv){
 
+  //i and o are filenames of named pipe
+  //sleepy not implemented
   int sleepy = 0;
   char * infile_name = NULL;
   char * input_pipe_path = NULL;
@@ -120,6 +123,7 @@ int main(int argc, char ** argv){
     return 1;
   }
 
+  //c file object which is wrapper for file descriptor
   FILE * instream = fdopen(input_pipe, "r");
   FILE * outstream = fdopen(output_pipe, "w");
   if(instream == NULL){
@@ -166,6 +170,7 @@ int main(int argc, char ** argv){
       fflush(stderr);
       //num_bytes_in = (int) input_sizes[round];
     }
+    //Grab 3 dimensions of matrix
     else{
       if(verbose){
         fprintf(stdout, "About to get header (%li bytes)\n", sizeof(data_shape[0]) * DATA_DIMENSIONS);
@@ -179,7 +184,6 @@ int main(int argc, char ** argv){
       }
     }
     
-    
     //Now we know how many bytes to receive
     //Read in data
     int num_in = 1;
@@ -187,6 +191,7 @@ int main(int argc, char ** argv){
       num_in *= data_shape[i];
     }
     
+    //num_in should be product of matrix dimensions i.e. 3*4*5 = 60
     if(verbose){
       fprintf(stdout, "Data dimensions: ");
       for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
@@ -194,14 +199,16 @@ int main(int argc, char ** argv){
       }
       fprintf(stdout, "\n");
     }
-    //TODO check malloc result
+
+    //Allocate array of floats for data
     float * input = NULL;
     input = malloc((unsigned int) num_in * sizeof(float));
     if(input == NULL){
-      fprintf(stderr, "ERROR: malloc failed\n")
+      fprintf(stderr, "ERROR: malloc failed\n");
       return -1;
     }
-    //Read in data
+    
+    //Read in data from array to dynamic memory (note num_in is finite number of dimensions)
     if(!fread(input, sizeof(float), num_in, instream)){
       fprintf(stderr, "ERROR: could not read bytes\n");
       return 1;
@@ -211,7 +218,7 @@ int main(int argc, char ** argv){
       fprintf(stderr, "Finished reading input from pipe\n");
     }
     
-    //First verify data
+    //First verify data (TODO consider optimizing freivalds)
     if(verify_frievald(input, data_shape)){
       //Frievald's algorithm failed - send back -1
       int frievald_result[DATA_DIMENSIONS];
@@ -236,6 +243,7 @@ int main(int argc, char ** argv){
         return 1;
       }
       int activated_data_size = 1;
+      //May need to account for conv dimensions
       for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
         activated_data_size *= activation_shape[i];
       }
@@ -260,7 +268,7 @@ int main(int argc, char ** argv){
         fprintf(stderr, "ERROR: could not write out\n");
         return 1;
       }
-      //Clean up memory
+      //Clean up memory (this is the data i.e. activation data)
       free(input);
       input = NULL;
       if(activation_data != NULL){
