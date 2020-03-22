@@ -1,7 +1,7 @@
 //enclave_driver.c
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
+//gcc -std=c99 -std=gnu99 ./enclave_driver.c -pedantic -Wall -O3 -o enclave_driver
 
-//gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -o enclave_driver
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
