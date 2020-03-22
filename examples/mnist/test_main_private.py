@@ -15,31 +15,31 @@ np.random.seed(0)
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Hyper-parameters
+# Hyper-parameters 
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 2
-batch_size = 50
+num_epochs = 1
+batch_size = 50000
 learning_rate = 0.00005
 
-# MNIST dataset
-train_dataset = torchvision.datasets.MNIST(root='../../data',
-                                           train=True,
-                                           transform=transforms.ToTensor(),
+# MNIST dataset 
+train_dataset = torchvision.datasets.MNIST(root='../../data', 
+                                           train=True, 
+                                           transform=transforms.ToTensor(),  
                                            download=True)
 
-test_dataset = torchvision.datasets.MNIST(root='../../data',
-                                          train=False,
+test_dataset = torchvision.datasets.MNIST(root='../../data', 
+                                          train=False, 
                                           transform=transforms.ToTensor())
 
 # Data loader
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                           batch_size=batch_size,
+train_loader = torch.utils.data.DataLoader(dataset=train_dataset, 
+                                           batch_size=batch_size, 
                                            shuffle=False)
 
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                          batch_size=batch_size,
+test_loader = torch.utils.data.DataLoader(dataset=test_dataset, 
+                                          batch_size=batch_size, 
                                           shuffle=False)
 
 rand_mask = torch.ones(784)
@@ -91,7 +91,7 @@ class MyFunction(Function):
     @staticmethod
     # bias is an optional argument
     def forward(ctx, input, weight, bias=None):
-        rand_mask = torch.ones(input.shape)
+        rand_mask = torch.zeros(input.shape)
         #weight_rand_mask = torch.ones(weight.shape)
 
         ctx.save_for_backward(input, weight, bias)
@@ -99,16 +99,18 @@ class MyFunction(Function):
         #weight = weight + weight_rand_mask
 
         output = input.mm(weight.t())
-
+        
         rand_mask = rand_mask.mm(weight.t())
         output = output - rand_mask #- weight_rand_mask
-
+        
         if bias is not None:
             #bias_rand_mask = torch.ones(output.shape)
             #bias = bias + bias_rand_mask
             output += bias.unsqueeze(0).expand_as(output)
             #output = output - bias_rand_mask
-
+        #print("Forward Output: ")
+        #print(output) 
+        #time.sleep(5)
         return output
 
     # This function has only a single output, so it gets only one gradient
@@ -132,7 +134,11 @@ class MyFunction(Function):
             grad_weight = grad_output.t().mm(input)
         if bias is not None and ctx.needs_input_grad[2]:
             grad_bias = grad_output.sum(0)
-
+        
+        #print("Grad_input: ")
+        #print(grad_input)
+        #time.sleep(5)
+        
         return grad_input, grad_weight, grad_bias
 
 
@@ -140,15 +146,19 @@ class MyFunction(Function):
 class NeuralNet(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(NeuralNet, self).__init__()
-        self.fc1 = Linear(input_size, hidden_size)
+        self.fc1 = Linear(input_size, hidden_size) 
         self.tanh = nn.Tanh()
-        self.fc2 = Linear(hidden_size, num_classes)
+        self.fc2 = Linear(hidden_size, num_classes)  
 
     def forward(self, x):
-
+        
+        
         out = self.fc1(x)
+        print(self.fc1.weight)
         out = self.tanh(out)
+        #print(out)
         out = self.fc2(out)
+        print(self.fc2.weight)
 
         return out
 
@@ -156,31 +166,31 @@ model = NeuralNet(input_size, hidden_size, num_classes).to(device)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, dampening=0, weigh$
+optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
 
 # Train the model
 total_step = len(train_loader)
 for epoch in range(num_epochs):
-    for i, (images, labels) in enumerate(train_loader):
+    for i, (images, labels) in enumerate(train_loader):  
         # Move tensors to the configured device
         images = images.reshape(-1, 28*28).to(device)
         labels = labels.to(device)
-
+        
         #rand_mask = torch.ones(784)
         #rand_mask2 = torch.ones(500)
-
+        
         #for k in images:
         #    k = torch.add(k, rand_mask)
         outputs = model(images)
         loss = criterion(outputs, labels)
-
+        
         # Backward and optimize
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
+        
         if (i+1) % 100 == 0:
-            print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
+            print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
                    .format(epoch+1, num_epochs, i+1, total_step, loss.item()))
 
 # Test the model
@@ -196,9 +206,7 @@ with torch.no_grad():
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
 
-    print('Accuracy of the network on the 10000 test images: {} %'.format(100 * corr$
+    print('Accuracy of the network on the 10000 test images: {} %'.format(100 * correct / total))
 
 # Save the model checkpoint
 torch.save(model.state_dict(), 'model.ckpt')
-
-
