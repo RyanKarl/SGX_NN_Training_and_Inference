@@ -17,6 +17,13 @@ int activate(float * data_in, int data_inshape[DATA_DIMENSIONS], float ** data_o
   //data_outshape must have DATA_DIMENSIONS elements
   *data_out = data_in;
   *data_outshape = data_inshape;
+  int num_elts = 1;
+  for(int i = 0; i < DATA_DIMENSIONS; i++){
+    num_elts *= (*data_outshape)[i];
+  }
+  for(int j = 0; j < num_elts; j++){
+    (*data_out)[j] *= 2.0;
+  }  
   return 0;
 }
 

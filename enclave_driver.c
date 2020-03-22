@@ -271,7 +271,7 @@ int main(int argc, char ** argv){
       //Clean up memory (this is the data i.e. activation data)
       free(input);
       input = NULL;
-      if(activation_data != NULL){
+      if(activation_data != NULL && activation_data != input){
         free(activation_data);
         activation_data = NULL;
       }
