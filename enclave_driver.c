@@ -1,7 +1,7 @@
 //enclave_driver.c
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
-//gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -o enclave_driver
+//gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -std=gnu99 -o enclave_driver
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -179,10 +179,6 @@ int main(int argc, char ** argv){
       }
     }
     
-    if(verbose){
-      fprintf(stdout, "Going to read %u bytes \n", (unsigned int) (DATA_DIMENSIONS * sizeof(data_shape[0])));
-      fflush(stdout);
-    }
     
     //Now we know how many bytes to receive
     //Read in data
@@ -198,8 +194,13 @@ int main(int argc, char ** argv){
       }
       fprintf(stdout, "\n");
     }
-    
-    float * input = malloc((unsigned int) num_in * sizeof(float));
+    //TODO check malloc result
+    float * input = NULL;
+    input = malloc((unsigned int) num_in * sizeof(float));
+    if(input == NULL){
+      fprintf(stderr, "ERROR: malloc failed\n")
+      return -1;
+    }
     //Read in data
     if(!fread(input, sizeof(float), num_in, instream)){
       fprintf(stderr, "ERROR: could not read bytes\n");
@@ -261,8 +262,14 @@ int main(int argc, char ** argv){
       }
       //Clean up memory
       free(input);
+      input = NULL;
       if(activation_data != NULL){
         free(activation_data);
+        activation_data = NULL;
+      }
+      if(activation_shape != NULL && activation_shape != data_shape){
+        free(activation_shape);
+        activation_shape = NULL;
       }
       if(verbose){
         fprintf(stdout, "Finished writing\n");
@@ -278,16 +285,20 @@ int main(int argc, char ** argv){
   fclose(instream);
   fclose(outstream);
   free(instream);
+  instream = NULL;
   free(outstream);
+  outstream = NULL;
 
   close(input_pipe);
   close(output_pipe);
 
   if(input_sizes){
     free(input_sizes);
+    input_sizes = NULL;
   }
   if(output_sizes){
     free(output_sizes);
+    output_sizes = NULL;
   }
   
   return 0;

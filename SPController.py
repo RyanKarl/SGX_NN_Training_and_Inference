@@ -40,7 +40,7 @@ class SPController:
     if verbose:
       self.args.append("-v")
     self.proc = subprocess.Popen(self.args)
-    self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=0) #Convert FD to pipe object
+    self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=0)
     self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=0)
     
   #input_data is float ndarray (3-D) by default
@@ -56,23 +56,27 @@ class SPController:
         header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER)
       self.gpu_pipe_w.write(header)
     if not raw_bytes:
-      input_data = b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(input_data, order='C')])
+      input_data = b''.join(struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(input_data, order='C'))
     self.gpu_pipe_w.write(input_data)
     response_sizes = list()
     if send_header:
       header_resp = self.enclave_pipe_r.read(DATA_DIMENSIONS*INT_BYTES)
       response_sizes = [int.from_bytes(header_resp[i:i+INT_BYTES], byteorder=BYTEORDER) for i in [INT_BYTES*y for y in range(DATA_DIMENSIONS)]]
+      #response_sizes = [int.from_bytes(x, byteorder=BYTEORDER) for x in [header_resp[0:4], header_resp[4:8], header_resp[8:12]]]
     else:
       raise NotImplementedError #Need to implement this if we do file-based sizes
+    if len(response_sizes) != DATA_DIMENSIONS:
+      print("ERROR: shape incorrect")
+      sys.exit(0)  
     if -1 in response_sizes:
       print("Frievald's Algorithm failed to verify!")
-      sys.exit(0)
+      return None
     num_floats = 1
     for d in response_sizes:
       num_floats *= d  
     enclave_response = self.enclave_pipe_r.read(num_floats*FLOAT_BYTES)
     float_resp = [struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)]
-    return float_resp
+    return np.reshape(float_resp, response_sizes)
     
   def close(self, force=True, cleanup=True):
     if not force:
@@ -96,6 +100,7 @@ class SPController:
 def main():
   floats = np.array([0.1*x for x in range(12)])
   floats = np.reshape(floats, (2, 3, 2))
+  print(str(floats))
   spc = SPController()
   spc.start()
   ret = spc.query_enclave(floats)
