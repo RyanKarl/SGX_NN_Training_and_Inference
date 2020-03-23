@@ -148,17 +148,28 @@ class NeuralNet(nn.Module):
         super(NeuralNet, self).__init__()
         self.fc1 = Linear(input_size, hidden_size) 
         self.tanh = nn.Tanh()
-        self.fc2 = Linear(hidden_size, num_classes)  
+        self.fc2 = Linear(hidden_size, hidden_size)  
+        self.tanh = nn.Tanh()
+        self.fc3 = Linear(hidden_size, hidden_size)
+        self.tanh = nn.Tanh()
+        self.fc4 = Linear(hidden_size, hidden_size)
+        self.tanh = nn.Tanh()
+        self.fc5 = Linear(hidden_size, num_classes)
+
+
 
     def forward(self, x):
         
         
         out = self.fc1(x)
-        print(self.fc1.weight)
         out = self.tanh(out)
-        #print(out)
         out = self.fc2(out)
-        print(self.fc2.weight)
+        out = self.tanh(out)
+        out = self.fc3(out)
+        out = self.tanh(out)
+        out = self.fc4(out)
+        out = self.tanh(out)
+        out = self.fc5(out)
 
         return out
 
