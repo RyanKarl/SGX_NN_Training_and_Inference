@@ -1,3 +1,6 @@
+source /home/software/sgx/sgxsdk/environment
+source /home/software/sgx-sdk/sgxsdk/environment
+
 -----------------------
 Purpose of Cxx11SGXDemo
 -----------------------
