@@ -219,7 +219,11 @@ int main(int argc, char ** argv){
     }
 
     if(verbose){
-      fprintf(stderr, "Finished reading input from pipe\n");
+      fprintf(stdout, "Finished reading input from pipe: ");
+      for(int i = 0; i < num_in; i++){
+        fprintf(stdout, "%f ", input[i]);
+      }
+      fprintf(stdout, "\n");
     }
     
     //First verify data (TODO consider optimizing freivalds)
@@ -237,24 +241,39 @@ int main(int argc, char ** argv){
       break;
     }
     else{
+    
+      if(verbose){
+        fprintf(stdout, "Frievald's algorithm succeeded on round %d\n", round);
+      }
+    
       //Now compute activation
       float * activation_data = NULL;
       int activation_n[MAT_DIM] = {0};
-      if(activate(input, matrix_n[2], &activation_data, (int **) &activation_n)){
+      float * c_mat_addr = input + ((matrix_n[0][0]*matrix_n[0][1])+(matrix_n[1][0]*matrix_n[1][1])); //Address of the start of C
+      if(activate(c_mat_addr, matrix_n[2], (float **) &activation_data, (int *) activation_n)){
         fprintf(stderr, "ERROR: activation failed on round %d\n", round);
         return 1;
+      }
+      
+      if(verbose){
+        fprintf(stdout, "Activated data (%d x %d): ", activation_n[0], activation_n[1]);
+        for(int i = 0; i < activation_n[0]*activation_n[1]; i++){
+          fprintf(stdout, "%f ", activation_data[i]);
+        }
+        fprintf(stdout, "\n");
       }
       
       int activated_bytes = activation_n[0]*activation_n[1]*sizeof(float);
       
       //Send header with length
-      if(!fwrite(&activated_bytes, sizeof(activated_bytes), 1, outstream)){
+      //Another dangerous cast
+      if(!fwrite((void *) activation_n, sizeof(activation_n[0]), MAT_DIM, outstream)){
         fprintf(stderr, "ERROR: could not write header\n");
         return 1;
       }
       
       if(verbose){
-        fprintf(stdout, "Sent output header: %d bytes\n", (int) sizeof(activated_bytes));
+        fprintf(stdout, "Sent output header: %d bytes\n", MAT_DIM);
         fprintf(stdout, "Sending %lu float outputs: ", (int) activated_bytes/sizeof(float));
         for(int i = 0; i < activated_bytes/sizeof(float); i++){
           fprintf(stdout, "%f ", activation_data[i]);
@@ -269,7 +288,7 @@ int main(int argc, char ** argv){
       }
       //Clean up memory (this is the data i.e. activation data)
       
-      if(activation_data != NULL && activation_data != input){
+      if(activation_data != NULL && activation_data != c_mat_addr){
         free(activation_data);
         activation_data = NULL;
       }

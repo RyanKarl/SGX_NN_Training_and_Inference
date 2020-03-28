@@ -4,6 +4,7 @@
 #ifndef ENCLAVE_FUNCTIONS_H
 #define ENCLAVE_FUNCTIONS_H
 
+#include <stdio.h>
 #include <assert.h>
 
 #ifndef CHAR_BIT
@@ -118,12 +119,14 @@ int verify_frievald(float * data, int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_
 
 //Return 1 if activation fails, 0 if successful
 int activate(float * data_in, int matrix_n[MAT_DIM], 
-  float ** data_out, int ** matrix_n_out){
+  float ** data_out, int * matrix_n_out){
   //Use the below if things are done in-place
   //data_outshape must have DATA_DIMENSIONS elements
+
   for(unsigned int i = 0; i < MAT_DIM; i++){
-    (*matrix_n_out)[i] = matrix_n[i];
+    matrix_n_out[i] = matrix_n[i];
   }
+
   *data_out = data_in;
 
   for(int j = 0; j < matrix_n[0]*matrix_n[1]*NUM_MATRICES; j++){

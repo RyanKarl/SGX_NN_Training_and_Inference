@@ -19,6 +19,8 @@ BYTEORDER = sys.byteorder
 DATA_DIMENSIONS = 3
 # f for float
 STRUCT_PACK_FMT = 'f'
+NUM_MATRICES = 3
+MAT_DIM = 2
 
 class SPController:
 
@@ -52,34 +54,51 @@ class SPController:
     self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=0)
     self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=0)
     
-  #input_data is float ndarray (3-D) by default
-  def query_enclave(self, input_data, send_header=True, raw_bytes=False):
+  #input_data is list of 3 float ndarrays (2-D) by default
+  def query_enclave(self, input_matrices, raw_bytes=False):
     #Send 3 ints as shape - use nditer to go over array of floats
-    data_shape = input_data.shape
-    if len(data_shape) != DATA_DIMENSIONS:
-      print("Data shape incorrect: " + str(data_shape))
+    
+    if len(input_matrices) != NUM_MATRICES:
+      print("ERROR: Matrix list incorrect: " + str(data_shape))
       sys.exit(0)
-    if send_header:
-      #b'' is python notation for byte string
-      header = b''
-      for dim in data_shape:
-        header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER)
-      self.gpu_pipe_w.write(header)
+      
+    matrix_dims = list()
+    
+    for im in input_matrices:
+      data_shape = im.shape
+      if len(data_shape) != MAT_DIM:
+        print("ERROR: matrix non 2-dimensional")
+        sys.exit(0) 
+      for s in data_shape:
+        matrix_dims.append(s)  
+
+    if len(matrix_dims) != MAT_DIM*NUM_MATRICES:
+      print("ERROR: incorrect number of dimensions: " + str(len(matrix_dims)))
+      sys.exit(0)
+
+    #b'' is python notation for byte string
+    header = b''
+    for dim in matrix_dims:
+      header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER)
+    self.gpu_pipe_w.write(header)
     #Packing input data from 3D numpy array to bytes
+    input_data = b''
     if not raw_bytes:
       #.pack takes object and puts into bit field
       #.nditer iterates over multidimensional array in c style i.e. gets raw values
-      input_data = b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(input_data, order='C')])
+      for y in input_matrices:
+        input_data += b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(y, order='C')])
+    else:
+      input_data = np.nditer(input_data, order='C')  
     self.gpu_pipe_w.write(input_data)
     response_sizes = list()
-    if send_header:
-      header_resp = self.enclave_pipe_r.read(DATA_DIMENSIONS*INT_BYTES)
-      #Reads blocks of 4 bytes into ints
-      response_sizes = [int.from_bytes(header_resp[i:i+INT_BYTES], byteorder=BYTEORDER) for i in [INT_BYTES*y for y in range(DATA_DIMENSIONS)]]
-      #response_sizes = [int.from_bytes(x, byteorder=BYTEORDER) for x in [header_resp[0:4], header_resp[4:8], header_resp[8:12]]]
-    else:
-      raise NotImplementedError #Need to implement this if we do file-based sizes
-    if len(response_sizes) != DATA_DIMENSIONS:
+
+    header_resp = self.enclave_pipe_r.read(MAT_DIM*INT_BYTES)
+    #Reads blocks of 4 bytes into ints
+    response_sizes = [int.from_bytes(header_resp[i:i+INT_BYTES], byteorder=BYTEORDER) for i in [INT_BYTES*y for y in range(MAT_DIM)]]
+    #response_sizes = [int.from_bytes(x, byteorder=BYTEORDER) for x in [header_resp[0:4], header_resp[4:8], header_resp[8:12]]]
+    
+    if len(response_sizes) != MAT_DIM:
       print("ERROR: shape incorrect")
       sys.exit(0)  
     #If any dimension sizes are negative 1 this fails
@@ -115,12 +134,16 @@ class SPController:
     
 #An example of how to use the SubProcess Controller
 def main():
+  a = [ [ 1.0, 1.0 ], [ 1.0, 1.0 ] ] 
+  b = [ [ 1.0, 1.0 ], [ 1.0, 1.0 ] ] 
+  c = [ [ 2.0, 2.0 ], [ 2.0, 2.0 ] ] 
+  arrs = [np.asarray(x) for x in [a, b, c]]
   floats = np.array([0.1*x for x in range(12)])
   floats = np.reshape(floats, (2, 3, 2))
   #initializes SPController
   spc = SPController()
-  spc.start()
-  ret = spc.query_enclave(floats)
+  spc.start(verbose=True)
+  ret = spc.query_enclave(arrs)
   if ret is None:
     print("Verification failed!")
   else:  
