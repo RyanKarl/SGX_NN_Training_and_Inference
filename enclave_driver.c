@@ -14,6 +14,8 @@
 
 #include "enclave_functions.h"
 
+
+
 //Assumes input file with num. entries on first line, and each entry being a space-separated pair of numbers of bytes
 //Returns 0 on error, number of entries otherwise
 unsigned int io_sizes(char * infile_name, unsigned int ** input_sizes, unsigned int ** output_sizes){
@@ -143,8 +145,7 @@ int main(int argc, char ** argv){
     fflush(stderr);
   }
 
-  unsigned int * input_sizes;
-  unsigned int * output_sizes;
+/*
   unsigned int num_entries;
   if(infile_name != NULL){    
     num_entries = io_sizes(infile_name, &input_sizes, &output_sizes);
@@ -158,12 +159,14 @@ int main(int argc, char ** argv){
     fprintf(stdout, "ERROR: file-based I/O sizes not implemented!\n");
     return 0;
   }
+*/
 
   //Track how many rounds we go through
   unsigned int round = 0;
   while(1){
     //Shape of input data
-    int data_shape[DATA_DIMENSIONS];
+    //Assumes a linear buffer
+    int matrix_n[NUM_MATRICES][MAT_DIM];
     //Get number of bytes either from file or from pipe
     if(infile_name != NULL){
       fprintf(stderr, "WARNING: file input not yet tested\n");
@@ -173,11 +176,12 @@ int main(int argc, char ** argv){
     //Grab 3 dimensions of matrix
     else{
       if(verbose){
-        fprintf(stdout, "About to get header (%li bytes)\n", sizeof(data_shape[0]) * DATA_DIMENSIONS);
+        fprintf(stdout, "About to get header (%li bytes)\n", sizeof(matrix_n));
         fflush(stdout);
       }
       
-      if(!fread(&data_shape, sizeof(data_shape[0]), DATA_DIMENSIONS, instream)){
+      //Dangerous cast - works because array is entirely contiguous
+      if(!fread((void *) &matrix_n, sizeof(int), NUM_MATRICES*MAT_DIM, instream)){
         fprintf(stderr, "ERROR: could not read header\n");
         fflush(stderr);
         return 1;
@@ -186,18 +190,18 @@ int main(int argc, char ** argv){
     
     //Now we know how many bytes to receive
     //Read in data
-    int num_in = 1;
-    for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
-      num_in *= data_shape[i];
+    int num_in = 0;
+    for(unsigned int i = 0; i < NUM_MATRICES; i++){
+      int mat_size = 1;
+      for(unsigned int j = 0; j < MAT_DIM; j++){
+        mat_size *= matrix_n[i][j];
+      }
+      num_in += mat_size;
     }
     
-    //num_in should be product of matrix dimensions i.e. 3*4*5 = 60
+    //num_bytes_in should be product of matrix dimensions i.e. 3*4*5 = 60 times sizeof(float)
     if(verbose){
-      fprintf(stdout, "Data dimensions: ");
-      for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
-        fprintf(stdout, "%d ", data_shape[i]);
-      }
-      fprintf(stdout, "\n");
+      fprintf(stdout, "Matrix size: %d \n", num_in);
     }
 
     //Allocate array of floats for data
@@ -219,13 +223,11 @@ int main(int argc, char ** argv){
     }
     
     //First verify data (TODO consider optimizing freivalds)
-    if(verify_frievald(input, data_shape)){
+    if(verify_frievald(input, matrix_n[0], matrix_n[1], matrix_n[2])){
       //Frievald's algorithm failed - send back -1
-      int frievald_result[DATA_DIMENSIONS];
-      for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
-        frievald_result[i] = -1;
-      }
-      if(!fwrite(&frievald_result, sizeof(frievald_result[0]), DATA_DIMENSIONS, outstream)){
+      int frievald_result[MAT_DIM];
+      frievald_result[0] = frievald_result[1] = -1;
+      if(!fwrite(&frievald_result, sizeof(frievald_result[0]), MAT_DIM, outstream)){
         fprintf(stderr, "ERROR: could not write failed verification\n");
         return 1;
       }
@@ -237,48 +239,43 @@ int main(int argc, char ** argv){
     else{
       //Now compute activation
       float * activation_data = NULL;
-      int * activation_shape;
-      if(activate(input, data_shape, &activation_data, &activation_shape)){
+      int activation_n[MAT_DIM] = {0};
+      if(activate(input, matrix_n[2], &activation_data, (int **) &activation_n)){
         fprintf(stderr, "ERROR: activation failed on round %d\n", round);
         return 1;
       }
-      int activated_data_size = 1;
-      //May need to account for conv dimensions
-      for(unsigned int i = 0; i < DATA_DIMENSIONS; i++){
-        activated_data_size *= activation_shape[i];
-      }
+      
+      int activated_bytes = activation_n[0]*activation_n[1]*sizeof(float);
       
       //Send header with length
-      if(!fwrite(activation_shape, sizeof(activation_shape[0]), DATA_DIMENSIONS, outstream)){
+      if(!fwrite(&activated_bytes, sizeof(activated_bytes), 1, outstream)){
         fprintf(stderr, "ERROR: could not write header\n");
         return 1;
       }
       
       if(verbose){
-        fprintf(stdout, "Sent output header: %d bytes\n", (int) sizeof(activation_shape[0])*DATA_DIMENSIONS);
-        fprintf(stdout, "Sending %d float outputs: ", activated_data_size);
-        for(int i = 0; i < activated_data_size; i++){
+        fprintf(stdout, "Sent output header: %d bytes\n", (int) sizeof(activated_bytes));
+        fprintf(stdout, "Sending %lu float outputs: ", (int) activated_bytes/sizeof(float));
+        for(int i = 0; i < activated_bytes/sizeof(float); i++){
           fprintf(stdout, "%f ", activation_data[i]);
         }
         fprintf(stdout, "\n");
       }
       
       //Now send actual data
-      if((!fwrite(activation_data, sizeof(activation_data[0]), activated_data_size, outstream)) || fflush(outstream)){
+      if((!fwrite(activation_data, sizeof(activation_data[0]), activated_bytes, outstream)) || fflush(outstream)){
         fprintf(stderr, "ERROR: could not write out\n");
         return 1;
       }
       //Clean up memory (this is the data i.e. activation data)
-      free(input);
-      input = NULL;
+      
       if(activation_data != NULL && activation_data != input){
         free(activation_data);
         activation_data = NULL;
       }
-      if(activation_shape != NULL && activation_shape != data_shape){
-        free(activation_shape);
-        activation_shape = NULL;
-      }
+      free(input);
+      input = NULL;
+
       if(verbose){
         fprintf(stdout, "Finished writing\n");
       }
@@ -300,14 +297,6 @@ int main(int argc, char ** argv){
   close(input_pipe);
   close(output_pipe);
 
-  if(input_sizes){
-    free(input_sizes);
-    input_sizes = NULL;
-  }
-  if(output_sizes){
-    free(output_sizes);
-    output_sizes = NULL;
-  }
   
   return 0;
 
