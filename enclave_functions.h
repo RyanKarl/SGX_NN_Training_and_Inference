@@ -17,10 +17,10 @@
 
 #define INDEX_FLOATMAT(f, i, j, n) (f[(i*n)+(j)])
 #define INDEX_BITARR(f, i) (( (f[i / (sizeof(int)*CHAR_BIT)]) >> (i%(sizeof(int)*CHAR_BIT))) & 1)
-
+#define FLOAT_CMP(a, b) (a != b)
 
 //Filler function - TODO pack fields
-void rand_bits(int * r, int n){
+inline void rand_bits(int * r, int n){
   for(int i = 0; i < n; i++){
     r[i] = 0;
     for(int j = 0; j < sizeof(int)*CHAR_BIT; j++){
@@ -28,12 +28,6 @@ void rand_bits(int * r, int n){
     }
   }
   return;
-}
-
-int float_cmp(float a, float b){
-  //DEBUG
-  //printf("%f %f\n", a, b);
-  return a != b;
 }
 
 //a, b, c are flattened 2d arrays
@@ -90,7 +84,7 @@ int frievald(float * a, float * b, float * c,
   for (int i = 0; i < c_idx[1]; i++){
       //DEBUG
       //printf("Comparing axbr[%d] and cr[%d]\n", i, i);
-      if (float_cmp(axbr[i], cr[i])){
+      if (FLOAT_CMP(axbr[i], cr[i])){
           free(axbr);
           free(cr);
           return 1;
