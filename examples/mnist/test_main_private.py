@@ -5,6 +5,9 @@ import torchvision
 import torchvision.transforms as transforms
 import time
 import numpy as np
+from PyTorchIPC import LinearAlt
+
+
 
 #Force Determinism
 torch.manual_seed(0)
@@ -146,6 +149,7 @@ class MyFunction(Function):
 class NeuralNet(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(NeuralNet, self).__init__()
+        self.enclave = LinearAlt()
         self.fc1 = Linear(input_size, hidden_size) 
         self.tanh = nn.Tanh()
         self.fc2 = Linear(hidden_size, hidden_size)  
@@ -160,8 +164,10 @@ class NeuralNet(nn.Module):
 
     def forward(self, x):
         
-        
+        #out = self.enclave(out)
         out = self.fc1(x)
+        #For testing... will move later
+        out = self.enclave(out, self.fc1.weight)
         out = self.tanh(out)
         out = self.fc2(out)
         out = self.tanh(out)
