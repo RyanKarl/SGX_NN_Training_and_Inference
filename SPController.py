@@ -21,6 +21,7 @@ DATA_DIMENSIONS = 3
 STRUCT_PACK_FMT = 'f'
 NUM_MATRICES = 3
 MAT_DIM = 2
+BUFFERING=-1
 
 class SPController:
 
@@ -51,8 +52,8 @@ class SPController:
     #Popen starts the process
     self.proc = subprocess.Popen(self.args)
     #No buffering to force immediate writes
-    self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=0)
-    self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=0)
+    self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=BUFFERING)
+    self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=BUFFERING)
     
   #input_data is list of 3 float ndarrays (2-D) by default
   def query_enclave(self, input_matrices, raw_bytes=False):
@@ -60,7 +61,7 @@ class SPController:
     
     if len(input_matrices) != NUM_MATRICES:
       print("ERROR: Matrix list incorrect: " + str(data_shape))
-      sys.exit(0)
+      return None
       
     matrix_dims = list()
     
@@ -68,19 +69,30 @@ class SPController:
       data_shape = im.shape
       if len(data_shape) != MAT_DIM:
         print("ERROR: matrix non 2-dimensional")
-        sys.exit(0) 
+        raise RuntimeError 
       for s in data_shape:
         matrix_dims.append(s)  
 
     if len(matrix_dims) != MAT_DIM*NUM_MATRICES:
       print("ERROR: incorrect number of dimensions: " + str(len(matrix_dims)))
-      sys.exit(0)
-
+      raise RuntimeError
+    
     #b'' is python notation for byte string
     header = b''
     for dim in matrix_dims:
       header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER)
+    
+    #Write input header  
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely")
+      return None  
+    if self.gpu_pipe_w.closed:
+      print("ERROR: output pipe closed")
+      raise RuntimeError  
     self.gpu_pipe_w.write(header)
+    self.gpu_pipe_w.flush()
+    
     #Packing input data from 3D numpy array to bytes
     input_data = b''
     if not raw_bytes:
@@ -90,25 +102,61 @@ class SPController:
         input_data += b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(y, order='C')])
     else:
       input_data = np.nditer(input_data, order='C')  
+      
+    #Write input  
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely")
+      return None  
+    if self.gpu_pipe_w.closed:
+      print("ERROR: output pipe closed")
+      raise RuntimeError    
     self.gpu_pipe_w.write(input_data)
+    self.gpu_pipe_w.flush()
     response_sizes = list()
 
+    #Read response header
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely")
+      return None
+    if self.enclave_pipe_r.closed:
+      print("ERROR: input pipe closed")
+      return None 
     header_resp = self.enclave_pipe_r.read(MAT_DIM*INT_BYTES)
+    if len(header_resp) != MAT_DIM*INT_BYTES:
+      print("ERROR: incorrect number of header bytes read in: " + str(len(header_resp)))
+      return None
+
     #Reads blocks of 4 bytes into ints
-    response_sizes = [int.from_bytes(header_resp[i:i+INT_BYTES], byteorder=BYTEORDER) for i in [INT_BYTES*y for y in range(MAT_DIM)]]
-    #response_sizes = [int.from_bytes(x, byteorder=BYTEORDER) for x in [header_resp[0:4], header_resp[4:8], header_resp[8:12]]]
-    
+    response_sizes = [int.from_bytes(header_resp[i:i+INT_BYTES], byteorder=BYTEORDER, signed=True) for i in [INT_BYTES*y for y in range(MAT_DIM)]]
+    #Equivalent to: response_sizes = [int.from_bytes(x, byteorder=BYTEORDER) for x in [header_resp[0:4], header_resp[4:8], header_resp[8:12]]]
     if len(response_sizes) != MAT_DIM:
       print("ERROR: shape incorrect")
-      sys.exit(0)  
+      return None
     #If any dimension sizes are negative 1 this fails
     if -1 in response_sizes:
       print("Frievald's Algorithm failed to verify!")
-      return None
+      return np.asarray([]) #Return an empty list
+    #DEBUG
+    print(response_sizes)  
+        
     num_floats = 1
     for d in response_sizes:
       num_floats *= d  
+    if self.enclave_pipe_r.closed:
+      print("ERROR: input pipe closed")
+      return None 
+      
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely")
+      return None  
     enclave_response = self.enclave_pipe_r.read(num_floats*FLOAT_BYTES)
+    if len(enclave_response) != num_floats*FLOAT_BYTES:
+      print("ERROR: incorrect number of data bytes read in: " + str(len(enclave_response)))
+      return None
+    
     #Unpacks bytes into array of floats
     float_resp = [struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)]
     return np.reshape(float_resp, response_sizes)
@@ -138,16 +186,18 @@ def main():
   b = [ [ 1.0, 1.0 ], [ 1.0, 1.0 ] ] 
   c = [ [ 2.0, 2.0 ], [ 2.0, 2.0 ] ] 
   arrs = [np.asarray(x) for x in [a, b, c]]
-  floats = np.array([0.1*x for x in range(12)])
-  floats = np.reshape(floats, (2, 3, 2))
   #initializes SPController
   spc = SPController()
   spc.start(verbose=True)
-  ret = spc.query_enclave(arrs)
-  if ret is None:
-    print("Verification failed!")
-  else:  
-    print("Response: " + str(ret))
+  for i in range(4):
+    ret = spc.query_enclave(arrs)
+    if ret is None:
+      print("Error in subprocess, exiting")
+      return
+    elif len(ret) == 0:
+      print("Frievald's Algorithm failed!")  
+    else:  
+      print("Response: " + str(ret) + '\n')
   spc.close()
   return  
     
