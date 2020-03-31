@@ -13,7 +13,8 @@ class MyFunction2(Function):
         input = input.detach().numpy()
         print(input, input.shape)
         np.random.shuffle(input)
-        
+        w = weight.detach().numpy()
+
         ret = spc.query_enclave([input, w, input @ w])
         if ret is None:
             print("Verification failed!")
