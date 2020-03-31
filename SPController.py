@@ -45,9 +45,10 @@ class SPController:
     self.proc = None
 
   #Call to actually start the subprocess and open pipes
-  def start(self, verbose=False):
-    if verbose:
-      self.args.append("-v")
+  def start(self, verbose=0):
+    if verbose > 0:
+      for i in range(verbose):
+        self.args.append("-v")
     
     #Popen starts the process
     self.proc = subprocess.Popen(self.args)
@@ -188,7 +189,7 @@ def main():
   arrs = [np.asarray(x) for x in [a, b, c]]
   #initializes SPController
   spc = SPController()
-  spc.start(verbose=True)
+  spc.start(verbose=2)
   for i in range(4):
     ret = spc.query_enclave(arrs)
     if ret is None:

@@ -87,7 +87,7 @@ int main(int argc, char ** argv){
   while((c = getopt(argc, argv, "sf:i:o:v")) != -1){
     switch(c){
       case 'v':{
-        verbose = 1;
+        verbose += 1;
         break;
       }
       case 's':{
@@ -219,7 +219,7 @@ int main(int argc, char ** argv){
       return 1;
     }
 
-    if(verbose){
+    if(verbose >= 2){
       fprintf(stdout, "Finished reading input from pipe: ");
       for(int i = 0; i < num_in; i++){
         fprintf(stdout, "%f ", input[i]);
@@ -260,7 +260,7 @@ int main(int argc, char ** argv){
         return 1;
       }
       
-      if(verbose){
+      if(verbose >= 2){
         fprintf(stdout, "Activated data (%d x %d): ", activation_n[0], activation_n[1]);
         for(int i = 0; i < activation_n[0]*activation_n[1]; i++){
           fprintf(stdout, "%f ", activation_data[i]);
@@ -280,7 +280,7 @@ int main(int argc, char ** argv){
       
       int activated_size = activation_n[0]*activation_n[1];
       
-      if(verbose){
+      if(verbose >= 2){
         fprintf(stdout, "Sent output header: %ld bytes\n", MAT_DIM*sizeof(activation_n[0]));
         fprintf(stdout, "Sending %d float outputs: ", activated_size);
         for(int i = 0; i < activated_size; i++){
