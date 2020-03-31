@@ -87,7 +87,7 @@ int main(int argc, char ** argv){
   while((c = getopt(argc, argv, "sf:i:o:v")) != -1){
     switch(c){
       case 'v':{
-        verbose = 1;
+        verbose += 1;
         break;
       }
       case 's':{
@@ -181,7 +181,7 @@ int main(int argc, char ** argv){
       }
       
       //Dangerous cast - works because array is entirely contiguous
-      if(!fread((void *) &matrix_n, sizeof(int), NUM_MATRICES*MAT_DIM, instream)){
+      if(!fread(matrix_n, sizeof(int), NUM_MATRICES*MAT_DIM, instream)){
         fprintf(stderr, "ERROR: could not read header\n");
         fflush(stderr);
         return 1;
@@ -201,7 +201,8 @@ int main(int argc, char ** argv){
     
     //num_bytes_in should be product of matrix dimensions i.e. 3*4*5 = 60 times sizeof(float)
     if(verbose){
-      fprintf(stdout, "Matrix size: %d \n", num_in);
+      fprintf(stdout, "Total matrix elements to receive: %d \n", num_in);
+      fflush(stdout);
     }
 
     //Allocate array of floats for data
@@ -218,12 +219,13 @@ int main(int argc, char ** argv){
       return 1;
     }
 
-    if(verbose){
+    if(verbose >= 2){
       fprintf(stdout, "Finished reading input from pipe: ");
       for(int i = 0; i < num_in; i++){
         fprintf(stdout, "%f ", input[i]);
       }
       fprintf(stdout, "\n");
+      fflush(stdout);
     }
     
     //First verify data (TODO consider optimizing freivalds)
@@ -231,59 +233,67 @@ int main(int argc, char ** argv){
       //Frievald's algorithm failed - send back -1
       int frievald_result[MAT_DIM];
       frievald_result[0] = frievald_result[1] = -1;
-      if(!fwrite(&frievald_result, sizeof(frievald_result[0]), MAT_DIM, outstream)){
+      if(verbose){
+        fprintf(stdout, "Frievald's algorithm failed on round %d\n", round);
+        fprintf(stdout, "Sending response: %d %d\n", frievald_result[0], frievald_result[1]);
+        fflush(stdout);
+      }
+      if((!fwrite((int *)frievald_result, sizeof(frievald_result[0]), MAT_DIM, outstream)) || fflush(outstream)){
         fprintf(stderr, "ERROR: could not write failed verification\n");
         return 1;
       }
-      if(verbose){
-        fprintf(stdout, "Frievald's algorithm failed on round %d, ending program\n", round);
-      }
-      break;
     }
     else{
     
       if(verbose){
         fprintf(stdout, "Frievald's algorithm succeeded on round %d\n", round);
+        fflush(stdout);
       }
     
       //Now compute activation
       float * activation_data = NULL;
-      int activation_n[MAT_DIM] = {0};
+      int activation_n[MAT_DIM] = {0, 0};
       float * c_mat_addr = input + ((matrix_n[0][0]*matrix_n[0][1])+(matrix_n[1][0]*matrix_n[1][1])); //Address of the start of C
       if(activate(c_mat_addr, matrix_n[2], (float **) &activation_data, (int *) activation_n)){
         fprintf(stderr, "ERROR: activation failed on round %d\n", round);
+        fflush(stderr);
         return 1;
       }
       
-      if(verbose){
+      if(verbose >= 2){
         fprintf(stdout, "Activated data (%d x %d): ", activation_n[0], activation_n[1]);
         for(int i = 0; i < activation_n[0]*activation_n[1]; i++){
           fprintf(stdout, "%f ", activation_data[i]);
         }
         fprintf(stdout, "\n");
+        fflush(stdout);
       }
       
-      int activated_bytes = activation_n[0]*activation_n[1]*sizeof(float);
+      
       
       //Send header with length
       //Another dangerous cast
-      if(!fwrite((void *) activation_n, sizeof(activation_n[0]), MAT_DIM, outstream)){
+      if((!fwrite((void *) activation_n, sizeof(activation_n[0]), MAT_DIM, outstream)) || fflush(outstream)){
         fprintf(stderr, "ERROR: could not write header\n");
         return 1;
       }
       
-      if(verbose){
-        fprintf(stdout, "Sent output header: %d bytes\n", MAT_DIM);
-        fprintf(stdout, "Sending %lu float outputs: ", (int) activated_bytes/sizeof(float));
-        for(int i = 0; i < activated_bytes/sizeof(float); i++){
+      int activated_size = activation_n[0]*activation_n[1];
+      
+      if(verbose >= 2){
+        fprintf(stdout, "Sent output header: %ld bytes\n", MAT_DIM*sizeof(activation_n[0]));
+        fprintf(stdout, "Sending %d float outputs: ", activated_size);
+        for(int i = 0; i < activated_size; i++){
           fprintf(stdout, "%f ", activation_data[i]);
         }
         fprintf(stdout, "\n");
+        fflush(stdout);
       }
       
       //Now send actual data
-      if((!fwrite(activation_data, sizeof(activation_data[0]), activated_bytes, outstream)) || fflush(outstream)){
+      if((!fwrite(activation_data, sizeof(float), activated_size, outstream)) || fflush(outstream)){
         fprintf(stderr, "ERROR: could not write out\n");
+        fflush(stderr);
         return 1;
       }
       //Clean up memory (this is the data i.e. activation data)
@@ -292,14 +302,17 @@ int main(int argc, char ** argv){
         free(activation_data);
         activation_data = NULL;
       }
-      free(input);
-      input = NULL;
+      
 
       if(verbose){
-        fprintf(stdout, "Finished writing\n");
+        fprintf(stdout, "Finished writing\n\n");
+        fflush(stdout);
       }
       
     }
+    
+    free(input);
+    input = NULL;
 
     round++;
   }
