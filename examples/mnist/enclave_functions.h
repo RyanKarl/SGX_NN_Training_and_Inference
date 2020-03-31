@@ -19,12 +19,12 @@
 #define INDEX_BITARR(f, i) (( (f[i / (sizeof(int)*CHAR_BIT)]) >> (i%(sizeof(int)*CHAR_BIT))) & 1)
 #define FLOAT_CMP(a, b) (a != b)
 
-//Filler function - TODO pack fields
-inline void rand_bits(int * r, int n){
+//Filler function
+void rand_bits(int * r, int n){
   for(int i = 0; i < n; i++){
     r[i] = 0;
     for(int j = 0; j < sizeof(int)*CHAR_BIT; j++){
-      r[i] |= (1 & rand()) << j;
+      r[i] |= (int)((1 & rand()) << j);
     }
   }
   return;
@@ -40,26 +40,50 @@ int frievald(float * a, float * b, float * c,
   assert(c_idx[0] == a_idx[0]);
   assert(c_idx[1] == b_idx[1]);
   //Create a random vector r
-  int * r = malloc(b_idx[1]*sizeof(int));
+  
+  //DEBUG
+  fprintf(stdout, "Allocating r with %d elements\n", b_idx[1]);
+  fflush(stdout);
+  
+  int * r = calloc(b_idx[1], sizeof(int));
+  //DEBUG
+  assert(r && "Allocating r failed!");
   rand_bits(r, b_idx[1]);
+  
+  //DEBUG
+  fprintf(stdout, "Rand. bits: ");
+  fflush(stdout);
+  for(int i = 0; i < b_idx[1]; i++){
+    fprintf(stdout, "%d ", r[i]);
+    fflush(stdout);
+  }
+  fprintf(stdout, "\n");
 
   //Hope that calloc properly sets bits to 0
   //Calculate br, cr in the same loop
   float * br = calloc(b_idx[1], sizeof(float));
   float * cr = calloc(c_idx[1], sizeof(float));
+  assert(br && "Allocating br failed!");
+  assert(cr && "Allocating cr failed!");
   for (int i = 0; i < b_idx[0]; i++){
       for (int j = 0; j < b_idx[1]; j++){
-          br[i] += INDEX_FLOATMAT(b, i, j, b_idx[0]) * INDEX_BITARR(r, j);
+          br[i] += INDEX_FLOATMAT(b, i, j, b_idx[0]) * ((int)INDEX_BITARR(r, j));
       }
   }
 
   for (int i = 0; i < c_idx[0]; i++){
       for (int j = 0; j < c_idx[1]; j++){
-          cr[i] += INDEX_FLOATMAT(c, i, j, c_idx[0]) * INDEX_BITARR(r, j);
+          cr[i] += INDEX_FLOATMAT(c, i, j, c_idx[0]) * ((int)INDEX_BITARR(r, j));
       }
   }
 
+
+  //DEBUG
+  fprintf(stdout, "Freeing r\n");
+  fflush(stdout);
+  assert(r && "Pointer r is OK");
   free(r);
+  
   
   /*
   //DEBUG
@@ -68,12 +92,16 @@ int frievald(float * a, float * b, float * c,
   */
 
   float * axbr = calloc(b_idx[0], sizeof(float));
+  assert(axbr && "Allocating axbr failed!");
   for (int i = 0; i < b_idx[0]; i++){
       for (int j = 0; j < b_idx[1]; j++){
           axbr[i] += INDEX_FLOATMAT(a, i, j, b_idx[0]) * br[j];
       }
   }
 
+  //DEBUG
+  fprintf(stdout, "Freeing br\n");
+  fflush(stdout);
   free(br);
   
   /*
@@ -91,7 +119,16 @@ int frievald(float * a, float * b, float * c,
       }
   }
   
+  //DEBUG
+  fprintf(stdout, "Freeing axbr\n");
+  fflush(stdout);
+  
   free(axbr);
+  
+  
+  //DEBUG
+  fprintf(stdout, "Freeing cr\n");
+  fflush(stdout);
   free(cr);
 
   return 0;
@@ -113,10 +150,11 @@ int verify_frievald(float * data, int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_
 
 //Return 1 if activation fails, 0 if successful
 int activate(float * data_in, int matrix_n[MAT_DIM], 
-  float ** data_out, int * matrix_n_out){
+  float ** data_out, int * matrix_n_out, int * alloc_new_data){
   //Use the below if things are done in-place
   //data_outshape must have DATA_DIMENSIONS elements
-
+  //Set this to 0 if malloc is used for *data_out
+  *alloc_new_data = 0;
   for(unsigned int i = 0; i < MAT_DIM; i++){
     matrix_n_out[i] = matrix_n[i];
   }

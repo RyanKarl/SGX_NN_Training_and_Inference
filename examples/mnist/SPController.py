@@ -26,7 +26,7 @@ BUFFERING=-1
 class SPController:
 
   #Initialization does not actually start subprocess
-  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES):
+  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False):
     self.pipe_names = pipe_names
     for producer, filepath in self.pipe_names.items():
       #Clear any previous file
@@ -36,7 +36,12 @@ class SPController:
       except FileExistsError as e:
         os.unlink(filepath)
         os.mkfifo(filepath)
-    self.args = [enclave_executable, "-i", self.pipe_names["gpu"], "-o", self.pipe_names["enclave"]]
+    self.args = list()   
+    self.debug = debug 
+    if debug:
+      self.args = ['gdb', enclave_executable]
+    else:  
+      self.args = [enclave_executable, "-i", self.pipe_names["gpu"], "-o", self.pipe_names["enclave"]]
     #Pipe that python program writes to
     self.gpu_pipe_w = None
     #Pipe that enclave reads from
@@ -51,10 +56,15 @@ class SPController:
         self.args.append("-v")
     
     #Popen starts the process
-    self.proc = subprocess.Popen(self.args)
+    self.proc = subprocess.Popen(self.args)  
     #No buffering to force immediate writes
     self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=BUFFERING)
     self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=BUFFERING)
+    if self.debug:
+      print("-i " + self.gpu_pipe_w)
+      print("-o " + self.enclave_pipe_r)
+      
+    
     
   #input_data is list of 3 float ndarrays (2-D) by default
   def query_enclave(self, input_matrices, raw_bytes=False):
@@ -86,7 +96,7 @@ class SPController:
     #Write input header  
     #Check to see if process is still ok
     if self.proc.poll() is not None:
-      print("ERROR: subprocess ended prematurely")
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
       return None  
     if self.gpu_pipe_w.closed:
       print("ERROR: output pipe closed")
@@ -107,7 +117,7 @@ class SPController:
     #Write input  
     #Check to see if process is still ok
     if self.proc.poll() is not None:
-      print("ERROR: subprocess ended prematurely")
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
       return None  
     if self.gpu_pipe_w.closed:
       print("ERROR: output pipe closed")
@@ -119,7 +129,7 @@ class SPController:
     #Read response header
     #Check to see if process is still ok
     if self.proc.poll() is not None:
-      print("ERROR: subprocess ended prematurely")
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
       return None
     if self.enclave_pipe_r.closed:
       print("ERROR: input pipe closed")
@@ -127,6 +137,7 @@ class SPController:
     header_resp = self.enclave_pipe_r.read(MAT_DIM*INT_BYTES)
     if len(header_resp) != MAT_DIM*INT_BYTES:
       print("ERROR: incorrect number of header bytes read in: " + str(len(header_resp)))
+      print("\t Header response was: " + str(header_resp))
       return None
 
     #Reads blocks of 4 bytes into ints
@@ -151,7 +162,7 @@ class SPController:
       
     #Check to see if process is still ok
     if self.proc.poll() is not None:
-      print("ERROR: subprocess ended prematurely")
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
       return None  
     enclave_response = self.enclave_pipe_r.read(num_floats*FLOAT_BYTES)
     if len(enclave_response) != num_floats*FLOAT_BYTES:
@@ -183,14 +194,19 @@ class SPController:
     
 #An example of how to use the SubProcess Controller
 def main():
-  a = [ [ 1.0, 1.0 ], [ 1.0, 1.0 ] ] 
-  b = [ [ 1.0, 1.0 ], [ 1.0, 1.0 ] ] 
-  c = [ [ 2.0, 2.0 ], [ 2.0, 2.0 ] ] 
+  #nums = [1.0]
+  size = int(sys.argv[1])
+  a = np.zeros((size, size), dtype=float)
+  b = np.zeros((size, size), dtype=float)
+  c = np.zeros((size, size), dtype=float)
   arrs = [np.asarray(x) for x in [a, b, c]]
   #initializes SPController
-  spc = SPController()
-  spc.start(verbose=2)
-  for i in range(4):
+  spc = SPController(debug=True)
+  spc.start(verbose=3)
+  num_tests = 4
+  if(len(sys.argv) >= 2+1):
+    num_tests = int(sys.argv[2])
+  for i in range(num_tests):
     ret = spc.query_enclave(arrs)
     if ret is None:
       print("Error in subprocess on round " + str(i) + ", exiting\n")

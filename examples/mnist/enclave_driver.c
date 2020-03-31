@@ -221,8 +221,10 @@ int main(int argc, char ** argv){
 
     if(verbose >= 2){
       fprintf(stdout, "Finished reading input from pipe: ");
-      for(int i = 0; i < num_in; i++){
-        fprintf(stdout, "%f ", input[i]);
+      if(verbose >= 3){
+        for(int i = 0; i < num_in; i++){
+          fprintf(stdout, "%f ", input[i]);
+        }
       }
       fprintf(stdout, "\n");
       fflush(stdout);
@@ -254,16 +256,25 @@ int main(int argc, char ** argv){
       float * activation_data = NULL;
       int activation_n[MAT_DIM] = {0, 0};
       float * c_mat_addr = input + ((matrix_n[0][0]*matrix_n[0][1])+(matrix_n[1][0]*matrix_n[1][1])); //Address of the start of C
-      if(activate(c_mat_addr, matrix_n[2], (float **) &activation_data, (int *) activation_n)){
+      int new_act_data = 0;
+      if(activate(c_mat_addr, matrix_n[2], (float **) &activation_data, (int *) activation_n, &new_act_data)){
         fprintf(stderr, "ERROR: activation failed on round %d\n", round);
         fflush(stderr);
         return 1;
       }
+      else{
+        if(verbose >= 2){
+          fprintf(stdout, "Activation successful on round %d\n", round);
+          fflush(stdout);
+        }
+      }
       
       if(verbose >= 2){
         fprintf(stdout, "Activated data (%d x %d): ", activation_n[0], activation_n[1]);
-        for(int i = 0; i < activation_n[0]*activation_n[1]; i++){
-          fprintf(stdout, "%f ", activation_data[i]);
+        if(verbose >= 3){
+          for(int i = 0; i < activation_n[0]*activation_n[1]; i++){
+            fprintf(stdout, "%f ", activation_data[i]);
+          }
         }
         fprintf(stdout, "\n");
         fflush(stdout);
@@ -277,15 +288,23 @@ int main(int argc, char ** argv){
         fprintf(stderr, "ERROR: could not write header\n");
         return 1;
       }
+      else{
+        if(verbose >=2){
+          fprintf(stdout, "Sent header!\n");
+          fflush(stdout);
+        }
+      }
       
       int activated_size = activation_n[0]*activation_n[1];
       
       if(verbose >= 2){
         fprintf(stdout, "Sent output header: %ld bytes\n", MAT_DIM*sizeof(activation_n[0]));
-        fprintf(stdout, "Sending %d float outputs: ", activated_size);
-        for(int i = 0; i < activated_size; i++){
-          fprintf(stdout, "%f ", activation_data[i]);
+        if(verbose >= 3){
+          for(int i = 0; i < activated_size; i++){
+            fprintf(stdout, "%f ", activation_data[i]);
+          }
         }
+        fprintf(stdout, "Sending %d float outputs: ", activated_size);
         fprintf(stdout, "\n");
         fflush(stdout);
       }
@@ -298,7 +317,12 @@ int main(int argc, char ** argv){
       }
       //Clean up memory (this is the data i.e. activation data)
       
-      if(activation_data != NULL && activation_data != c_mat_addr){
+      //Check that the activated data is a valid pointer, and not in range of input
+      if((activation_data != NULL) && new_act_data){
+        if(verbose >= 2){
+          fprintf(stdout, "Freeing activated data\n");
+          fflush(stdout);
+        }
         free(activation_data);
         activation_data = NULL;
       }
@@ -311,6 +335,10 @@ int main(int argc, char ** argv){
       
     }
     
+    if(verbose >= 2){
+      fprintf(stdout, "Freeing input data\n");
+      fflush(stdout);
+    }
     free(input);
     input = NULL;
 
