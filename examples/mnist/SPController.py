@@ -193,12 +193,12 @@ def main():
   for i in range(4):
     ret = spc.query_enclave(arrs)
     if ret is None:
-      print("Error in subprocess, exiting")
+      print("Error in subprocess on round " + str(i) + ", exiting\n")
       return
     elif len(ret) == 0:
-      print("Frievald's Algorithm failed!")  
+      print("Frievald's Algorithm failed on round " + str(i) + "!\n")  
     else:  
-      print("Response: " + str(ret) + '\n')
+      print("Response on round " + str(i) + ": " + str(ret) + '\n')
   spc.close()
   return  
     
