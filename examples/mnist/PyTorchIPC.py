@@ -8,7 +8,7 @@ class MyFunction2(Function):
     # Note that both forward and backward are @staticmethods
     @staticmethod
     # bias is an optional argument
-    def forward(ctx, input, weight = None, bias=None):
+    def forward(ctx, input, weight = None, bias=None, spc = None):
 
         input = input.detach().numpy()
         print(input, input.shape)
@@ -35,9 +35,9 @@ class LinearAlt(nn.Module):
 
 
 
-    def forward(self, input, weight, bias):
+    def forward(self, input, weight, bias = None):
         # See the autograd section for explanation of what happens here.
-        return MyFunction2.apply(self.spc, input, weight, None)
+        return MyFunction2.apply(input, weight, bias, self.spc)
     
     #def forward(self, input):
         # See the autograd section for explanation of what happens here.
