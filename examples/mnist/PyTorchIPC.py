@@ -13,9 +13,16 @@ class MyFunction2(Function):
         input = input.detach().numpy()
         print(input, input.shape)
         np.random.shuffle(input)
+        
+        ret = spc.query_enclave([input, w, input @ w])
+        if ret is None:
+            print("Verification failed!")
+        else:
+            print("Response: " + str(ret))
+  
         output = input
-
-        return torch.autograd.Variable(torch.tensor(output))
+  
+        return torch.autograd.Variable(torch.tensor(output)) 
 
     # This function has only a single output, so it gets only one gradient
     @staticmethod
