@@ -38,10 +38,7 @@ class SPController:
         os.mkfifo(filepath)
     self.args = list()   
     self.debug = debug 
-    if debug:
-      self.args = ['gdb', enclave_executable]
-    else:  
-      self.args = [enclave_executable, "-i", self.pipe_names["gpu"], "-o", self.pipe_names["enclave"]]
+    self.args = [enclave_executable, "-i", self.pipe_names["gpu"], "-o", self.pipe_names["enclave"]]
     #Pipe that python program writes to
     self.gpu_pipe_w = None
     #Pipe that enclave reads from
@@ -64,12 +61,8 @@ class SPController:
       print("-i " + self.gpu_pipe_w)
       print("-o " + self.enclave_pipe_r)
       
-    
-    
-  #input_data is list of 3 float ndarrays (2-D) by default
-  def query_enclave(self, input_matrices, raw_bytes=False):
-    #Send 3 ints as shape - use nditer to go over array of floats
-    
+  @staticmethod  
+  def validate_and_pack(input_matrices, raw_bytes=False):
     if len(input_matrices) != NUM_MATRICES:
       print("ERROR: Matrix list incorrect: " + str(data_shape))
       return None
@@ -80,30 +73,18 @@ class SPController:
       data_shape = im.shape
       if len(data_shape) != MAT_DIM:
         print("ERROR: matrix non 2-dimensional")
-        raise RuntimeError 
+        return None 
       for s in data_shape:
         matrix_dims.append(s)  
 
     if len(matrix_dims) != MAT_DIM*NUM_MATRICES:
       print("ERROR: incorrect number of dimensions: " + str(len(matrix_dims)))
-      raise RuntimeError
-    
+      return None
     #b'' is python notation for byte string
+    #Send 3 ints as shape - use nditer to go over array of floats
     header = b''
     for dim in matrix_dims:
-      header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER)
-    
-    #Write input header  
-    #Check to see if process is still ok
-    if self.proc.poll() is not None:
-      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
-      return None  
-    if self.gpu_pipe_w.closed:
-      print("ERROR: output pipe closed")
-      raise RuntimeError  
-    self.gpu_pipe_w.write(header)
-    self.gpu_pipe_w.flush()
-    
+      header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER)  
     #Packing input data from 3D numpy array to bytes
     input_data = b''
     if not raw_bytes:
@@ -114,6 +95,26 @@ class SPController:
     else:
       input_data = np.nditer(input_data, order='C')  
       
+    return (header, input_data)  
+    
+  #input_data is list of 3 float ndarrays (2-D) by default
+  def query_enclave(self, input_matrices, raw_bytes=False):
+    packed_input = SPController.validate_and_pack(input_matrices, raw_bytes)
+    if packed_input is None:
+      print("Bad input")
+      return None
+   
+    #Write input header  
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
+      return None  
+    if self.gpu_pipe_w.closed:
+      print("ERROR: output pipe closed")
+      raise RuntimeError  
+    self.gpu_pipe_w.write(packed_input[0])
+    self.gpu_pipe_w.flush()
+    
     #Write input  
     #Check to see if process is still ok
     if self.proc.poll() is not None:
@@ -122,7 +123,7 @@ class SPController:
     if self.gpu_pipe_w.closed:
       print("ERROR: output pipe closed")
       raise RuntimeError    
-    self.gpu_pipe_w.write(input_data)
+    self.gpu_pipe_w.write(packed_input[1])
     self.gpu_pipe_w.flush()
     response_sizes = list()
 
@@ -194,14 +195,20 @@ class SPController:
     
 #An example of how to use the SubProcess Controller
 def main():
-  #nums = [1.0]
   size = int(sys.argv[1])
   a = np.zeros((size, size), dtype=float)
   b = np.zeros((size, size), dtype=float)
   c = np.zeros((size, size), dtype=float)
   arrs = [np.asarray(x) for x in [a, b, c]]
+  
+  #Use this to generate output without actually running the subprocess
+  if '-f' in sys.argv:
+    parsed = SPController.validate_and_pack(arrs)
+    sys.stdout.buffer.write(parsed[0]+parsed[1])
+    return
+  
   #initializes SPController
-  spc = SPController(debug=True)
+  spc = SPController(debug=False)
   spc.start(verbose=3)
   num_tests = 4
   if(len(sys.argv) >= 2+1):

@@ -1,11 +1,38 @@
 //enclave_functions.h
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
+//compile with --wrap=malloc_consolidate to intercept that function?
+
 #ifndef ENCLAVE_FUNCTIONS_H
 #define ENCLAVE_FUNCTIONS_H
 
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
+#include <unistd.h>
+
+//DEBUG code
+/*
+#include <execinfo.h>
+#define NUM_FRAMES 10
+
+void __real_malloc_consolidate();
+
+void __wrap_malloc_consolidate(){
+  void * arr[NUM_FRAMES];
+  printf("malloc_consolidate called\n");
+  fflush(stdout);
+  size_t bt_size = backtrace(arr, NUM_FRAMES);
+  backtrace_symbols_fd(arr, bt_size, STDOUT_FILENO);
+  fflush(stdout);
+  __real_malloc_consolidate();
+  return;
+}
+*/
+
+
+
 
 #ifndef CHAR_BIT
 #define CHAR_BIT 8
@@ -19,8 +46,11 @@
 #define INDEX_BITARR(f, i) (( (f[i / (sizeof(int)*CHAR_BIT)]) >> (i%(sizeof(int)*CHAR_BIT))) & 1)
 #define FLOAT_CMP(a, b) (a != b)
 
+
+
 //Filler function
-void rand_bits(int * r, int n){
+inline void rand_bits(int * r, int n){
+  assert(r);
   for(int i = 0; i < n; i++){
     r[i] = 0;
     for(int j = 0; j < sizeof(int)*CHAR_BIT; j++){
@@ -31,6 +61,7 @@ void rand_bits(int * r, int n){
 }
 
 //a, b, c are flattened 2d arrays
+//Can consider moving validation outside
 int frievald(float * a, float * b, float * c, 
   int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_idx[MAT_DIM])
 {
@@ -41,30 +72,22 @@ int frievald(float * a, float * b, float * c,
   assert(c_idx[1] == b_idx[1]);
   //Create a random vector r
   
-  //DEBUG
-  fprintf(stdout, "Allocating r with %d elements\n", b_idx[1]);
-  fflush(stdout);
-  
   int * r = calloc(b_idx[1], sizeof(int));
-  //DEBUG
-  assert(r && "Allocating r failed!");
-  rand_bits(r, b_idx[1]);
-  
-  //DEBUG
-  fprintf(stdout, "Rand. bits: ");
-  fflush(stdout);
-  for(int i = 0; i < b_idx[1]; i++){
-    fprintf(stdout, "%d ", r[i]);
-    fflush(stdout);
+  if(!r){
+    assert(r && "calloc failed");
   }
-  fprintf(stdout, "\n");
+  rand_bits(r, b_idx[1]);
 
   //Hope that calloc properly sets bits to 0
   //Calculate br, cr in the same loop
   float * br = calloc(b_idx[1], sizeof(float));
   float * cr = calloc(c_idx[1], sizeof(float));
-  assert(br && "Allocating br failed!");
-  assert(cr && "Allocating cr failed!");
+  if(!br){
+    assert(br && "malloc failed");
+  }
+  if(!cr){
+    assert(cr && "malloc failed");
+  }
   for (int i = 0; i < b_idx[0]; i++){
       for (int j = 0; j < b_idx[1]; j++){
           br[i] += INDEX_FLOATMAT(b, i, j, b_idx[0]) * ((int)INDEX_BITARR(r, j));
@@ -77,21 +100,13 @@ int frievald(float * a, float * b, float * c,
       }
   }
 
-
-  //DEBUG
-  fprintf(stdout, "Freeing r\n");
-  fflush(stdout);
-  assert(r && "Pointer r is OK");
   free(r);
-  
-  
-  /*
-  //DEBUG
-  print_float_vec(br, n);
-  print_float_vec(cr, n);
-  */
+  r = NULL;
 
   float * axbr = calloc(b_idx[0], sizeof(float));
+  if(!axbr){
+    assert(axbr && "malloc failed");
+  }
   assert(axbr && "Allocating axbr failed!");
   for (int i = 0; i < b_idx[0]; i++){
       for (int j = 0; j < b_idx[1]; j++){
@@ -99,37 +114,22 @@ int frievald(float * a, float * b, float * c,
       }
   }
 
-  //DEBUG
-  fprintf(stdout, "Freeing br\n");
-  fflush(stdout);
   free(br);
-  
-  /*
-  //DEBUG
-  print_float_vec(axbr, n);
-  */
+  br = NULL;
 
   for (int i = 0; i < c_idx[1]; i++){
-      //DEBUG
-      //printf("Comparing axbr[%d] and cr[%d]\n", i, i);
-      if (FLOAT_CMP(axbr[i], cr[i])){
-          free(axbr);
-          free(cr);
-          return 1;
-      }
+    if (FLOAT_CMP(axbr[i], cr[i])){
+        free(axbr);
+        free(cr);
+        axbr = cr = NULL;
+        return 1;
+    }
   }
-  
-  //DEBUG
-  fprintf(stdout, "Freeing axbr\n");
-  fflush(stdout);
-  
+
   free(axbr);
-  
-  
-  //DEBUG
-  fprintf(stdout, "Freeing cr\n");
-  fflush(stdout);
+  axbr = NULL;
   free(cr);
+  cr = NULL;
 
   return 0;
 }
@@ -161,7 +161,7 @@ int activate(float * data_in, int matrix_n[MAT_DIM],
 
   *data_out = data_in;
 
-  for(int j = 0; j < matrix_n[0]*matrix_n[1]*NUM_MATRICES; j++){
+  for(int j = 0; j < matrix_n[0]*matrix_n[1]; j++){
     (*data_out)[j] *= 2.0;
   }  
 

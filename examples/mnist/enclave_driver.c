@@ -2,6 +2,16 @@
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 //gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -std=gnu99 -o enclave_driver
 
+//Defined first to go before other standard libs
+/*
+#define malloc_consolidate(){\
+fprintf(stdout, "%s %s \n", __FILE__, __LINE__);\
+malloc_consolidate();\
+}
+*/
+
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,80 +21,40 @@
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
+#include <malloc.h>
+
+/*
+#include <execinfo.h>
+#define NUM_FRAMES 10
+
+void __real_malloc_consolidate();
+
+void __wrap_malloc_consolidate(){
+  void * arr[NUM_FRAMES];
+  printf("malloc_consolidate called\n");
+  fflush(stdout);
+  size_t bt_size = backtrace(arr, NUM_FRAMES);
+  backtrace_symbols_fd(arr, bt_size, STDOUT_FILENO);
+  fflush(stdout);
+  __real_malloc_consolidate();
+  return;
+}
+*/
 
 #include "enclave_functions.h"
-
-
-
-//Assumes input file with num. entries on first line, and each entry being a space-separated pair of numbers of bytes
-//Returns 0 on error, number of entries otherwise
-unsigned int io_sizes(char * infile_name, unsigned int ** input_sizes, unsigned int ** output_sizes){
- //Initialize infile
-  FILE * infile = NULL;
-  if(infile_name != NULL){
-    infile = fopen(infile_name, "r");
-    if(infile == NULL){
-      fprintf(stderr, "ERROR: failed opening %s\n", infile_name);
-      return 1;
-    }
-  }
-
-  unsigned int num_entries;
-  if(fscanf(infile, "%u", &num_entries) != 1){
-    fprintf(stderr, "ERROR: failed reading num. entries from %s\n", infile_name);
-    return 0;
-  }
-  *input_sizes = (unsigned int *) malloc(num_entries*sizeof(**input_sizes));
-  *output_sizes = (unsigned int *) malloc(num_entries*sizeof(**output_sizes));
-  if(*input_sizes == NULL || *output_sizes == NULL){
-    fprintf(stderr, "ERROR: cannot allocate memory\n");
-    return 0;
-  }
-  for(unsigned int i = 0; i < num_entries; i++){
-    int scanresult;
-    scanresult = fscanf(infile, "%u", (*input_sizes)+i);
-    if(scanresult == EOF){
-      fprintf(stderr, "ERROR: EOF reached %u\n", i);
-      return 0;
-    }
-    if(scanresult != 1){
-      fprintf(stderr, "ERROR: entry %u %i\n", i, scanresult);
-      return 0;
-    }
-
-    scanresult = fscanf(infile, "%u", (*output_sizes)+i);
-    if(scanresult == EOF){
-      fprintf(stderr, "ERROR: EOF reached %u\n", i);
-      return 0;
-    }
-    if(scanresult != 1){
-      fprintf(stderr, "ERROR: entry %u %i\n", i, scanresult);
-      return 0;
-    }
-  }
-
-  if(fclose(infile)){
-    fprintf(stderr, "ERROR: could not close %s\n", infile_name);
-    return 0;
-  }
-  
-  free(infile);
-
-  return num_entries;  
-}
 
 int main(int argc, char ** argv){
 
   //i and o are filenames of named pipe
   //sleepy not implemented
   int sleepy = 0;
-  char * infile_name = NULL;
+  int use_std_io = 0;
   char * input_pipe_path = NULL;
   char * output_pipe_path = NULL;
   int verbose = 0;
 
   char c;
-  while((c = getopt(argc, argv, "sf:i:o:v")) != -1){
+  while((c = getopt(argc, argv, "sfi:o:v")) != -1){
     switch(c){
       case 'v':{
         verbose += 1;
@@ -95,7 +65,7 @@ int main(int argc, char ** argv){
         break;
       }
       case 'f':{
-        infile_name = optarg;
+        use_std_io = 1;
         break;
       }
       case 'i':{
@@ -114,20 +84,43 @@ int main(int argc, char ** argv){
   }
 
   
-  int input_pipe = open(input_pipe_path, O_RDONLY);
+  int input_pipe = 0;
+  if(!use_std_io){
+    input_pipe = open(input_pipe_path, O_RDONLY);
+  } 
   if(input_pipe == -1){
     fprintf(stderr, "ERROR: could not open input pipe %s\n", input_pipe_path);
     return 1;
   }
-  int output_pipe = open(output_pipe_path, O_WRONLY);
+  int output_pipe = 0;
+  if(!use_std_io){
+    output_pipe = open(output_pipe_path, O_WRONLY);
+  }  
   if(output_pipe == -1){
     fprintf(stderr, "ERROR: could not open output pipe %s\n", output_pipe_path);
     return 1;
   }
 
   //c file object which is wrapper for file descriptor
-  FILE * instream = fdopen(input_pipe, "r");
-  FILE * outstream = fdopen(output_pipe, "w");
+  FILE * instream;
+  FILE * outstream;
+  if(use_std_io){
+    if(verbose >= 2){
+      fprintf(stdout, "Assigning I/O to std\n");
+      fflush(stdout);
+    }
+    instream = stdin;
+    outstream = stdout;
+  }
+  else{
+    if(verbose >= 2){
+      fprintf(stdout, "Assigning I/O to file descriptors\n");
+      fflush(stdout);
+    }
+    instream = fdopen(input_pipe, "r");
+    outstream = fdopen(output_pipe, "w");
+  }
+   
   if(instream == NULL){
     fprintf(stderr, "ERROR: unable to open input pipe as file stream\n");
     fflush(stderr);
@@ -145,47 +138,33 @@ int main(int argc, char ** argv){
     fflush(stderr);
   }
 
-/*
-  unsigned int num_entries;
-  if(infile_name != NULL){    
-    num_entries = io_sizes(infile_name, &input_sizes, &output_sizes);
-    if(!num_entries){
-      fprintf(stderr, "ERROR: reading I/O sizes from %s failed\n", infile_name);
-      fflush(stderr);
-      return 1;
-    }
-    
-    //TODO implement file-based?
-    fprintf(stdout, "ERROR: file-based I/O sizes not implemented!\n");
-    return 0;
-  }
-*/
-
   //Track how many rounds we go through
   unsigned int round = 0;
   while(1){
     //Shape of input data
     //Assumes a linear buffer
     int matrix_n[NUM_MATRICES][MAT_DIM];
-    //Get number of bytes either from file or from pipe
-    if(infile_name != NULL){
-      fprintf(stderr, "WARNING: file input not yet tested\n");
-      fflush(stderr);
-      //num_bytes_in = (int) input_sizes[round];
+    //Get number of bytes from pipe
+    if(verbose){
+      fprintf(stdout, "About to get header (%li bytes)\n", sizeof(matrix_n));
+      fflush(stdout);
     }
-    //Grab 3 dimensions of matrix
-    else{
-      if(verbose){
-        fprintf(stdout, "About to get header (%li bytes)\n", sizeof(matrix_n));
-        fflush(stdout);
+    
+    //Dangerous cast - works because array is entirely contiguous
+    if(!fread((int*) matrix_n, sizeof(int), NUM_MATRICES*MAT_DIM, instream)){
+      fprintf(stderr, "ERROR: could not read header\n");
+      fflush(stderr);
+      return 1;
+    }
+
+    if(verbose >= 2){
+      fprintf(stdout, "Matrix dimensions received: ");
+      for(unsigned int i = 0; i < NUM_MATRICES; i++){
+        for(unsigned int j = 0; j < MAT_DIM; j++){
+          fprintf(stdout, "%d ", matrix_n[i][j]);
+        }
       }
-      
-      //Dangerous cast - works because array is entirely contiguous
-      if(!fread(matrix_n, sizeof(int), NUM_MATRICES*MAT_DIM, instream)){
-        fprintf(stderr, "ERROR: could not read header\n");
-        fflush(stderr);
-        return 1;
-      }
+      fprintf(stdout, "\n");
     }
     
     //Now we know how many bytes to receive
@@ -206,9 +185,8 @@ int main(int argc, char ** argv){
     }
 
     //Allocate array of floats for data
-    float * input = NULL;
-    input = malloc((unsigned int) num_in * sizeof(float));
-    if(input == NULL){
+    float * input = malloc((unsigned int) num_in * sizeof(float));
+    if(!input){
       fprintf(stderr, "ERROR: malloc failed\n");
       return -1;
     }
@@ -240,7 +218,7 @@ int main(int argc, char ** argv){
         fprintf(stdout, "Sending response: %d %d\n", frievald_result[0], frievald_result[1]);
         fflush(stdout);
       }
-      if((!fwrite((int *)frievald_result, sizeof(frievald_result[0]), MAT_DIM, outstream)) || fflush(outstream)){
+      if((!fwrite((int *) frievald_result, sizeof(frievald_result[0]), MAT_DIM, outstream)) || fflush(outstream)){
         fprintf(stderr, "ERROR: could not write failed verification\n");
         return 1;
       }
@@ -284,8 +262,9 @@ int main(int argc, char ** argv){
       
       //Send header with length
       //Another dangerous cast
-      if((!fwrite((void *) activation_n, sizeof(activation_n[0]), MAT_DIM, outstream)) || fflush(outstream)){
+      if((!fwrite((int *) activation_n, sizeof(activation_n[0]), MAT_DIM, outstream)) || fflush(outstream)){
         fprintf(stderr, "ERROR: could not write header\n");
+        fflush(stderr);
         return 1;
       }
       else{
@@ -300,24 +279,24 @@ int main(int argc, char ** argv){
       if(verbose >= 2){
         fprintf(stdout, "Sent output header: %ld bytes\n", MAT_DIM*sizeof(activation_n[0]));
         if(verbose >= 3){
+          fprintf(stdout, "Sending %d float outputs: ", activated_size);
           for(int i = 0; i < activated_size; i++){
             fprintf(stdout, "%f ", activation_data[i]);
           }
         }
-        fprintf(stdout, "Sending %d float outputs: ", activated_size);
         fprintf(stdout, "\n");
         fflush(stdout);
       }
       
       //Now send actual data
-      if((!fwrite(activation_data, sizeof(float), activated_size, outstream)) || fflush(outstream)){
+      if((!fwrite((float *) activation_data, sizeof(float), activated_size, outstream)) || fflush(outstream)){
         fprintf(stderr, "ERROR: could not write out\n");
         fflush(stderr);
         return 1;
       }
       //Clean up memory (this is the data i.e. activation data)
       
-      //Check that the activated data is a valid pointer, and not in range of input
+      //Check that the activated data is a valid pointer, and not in range of input (i.e. fresh)
       if((activation_data != NULL) && new_act_data){
         if(verbose >= 2){
           fprintf(stdout, "Freeing activated data\n");
@@ -346,6 +325,7 @@ int main(int argc, char ** argv){
   }
 
   //Close the given pipes, clean up memory
+  //This code will rarely be called, as the program will be killed by the Python driver
   
   fclose(instream);
   fclose(outstream);
@@ -354,9 +334,10 @@ int main(int argc, char ** argv){
   free(outstream);
   outstream = NULL;
 
-  close(input_pipe);
-  close(output_pipe);
-
+  if(use_std_io){
+    close(input_pipe);
+    close(output_pipe);
+  }
   
   return 0;
 
