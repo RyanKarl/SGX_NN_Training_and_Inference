@@ -6,8 +6,7 @@ import torchvision.transforms as transforms
 import time
 import numpy as np
 from PyTorchIPC import LinearAlt
-
-
+from optimizer import SGD
 
 #Force Determinism
 torch.manual_seed(0)
@@ -22,9 +21,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 1
+num_epochs = 10
 batch_size = 50000
-learning_rate = 0.00005
+learning_rate = 0.05
 
 # MNIST dataset 
 train_dataset = torchvision.datasets.MNIST(root='../../data', 
@@ -44,10 +43,6 @@ train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, 
                                           batch_size=batch_size, 
                                           shuffle=False)
-
-rand_mask = torch.ones(784)
-rand_mask2 = torch.ones(500)
-
 
 class Linear(nn.Module):
     def __init__(self, input_features, output_features, bias=True):
@@ -72,6 +67,8 @@ class Linear(nn.Module):
 
         # Not a very smart way to initialize weights
         self.weight.data.uniform_(-0.1, 0.1)
+        self.weight.data += torch.ones(self.weight.shape)
+        
         if bias is not None:
             self.bias.data.uniform_(-0.1, 0.1)
 
@@ -95,7 +92,7 @@ class MyFunction(Function):
     # bias is an optional argument
     def forward(ctx, input, weight, bias=None):
         rand_mask = torch.ones(input.shape)
-        #weight_rand_mask = torch.ones(weight.shape)
+        weight_rand_mask = torch.ones(weight.shape)
 
         ctx.save_for_backward(input, weight, bias)
         input = input + rand_mask
@@ -114,6 +111,14 @@ class MyFunction(Function):
         #print("Forward Output: ")
         #print(output) 
         #time.sleep(5)
+
+
+        return output
+
+    def eval(ctx, input, weight, bias=None):
+        weight = weight - torch.ones(weight.shape) 
+        output = input.mm(weight.t())
+        
         return output
 
     # This function has only a single output, so it gets only one gradient
@@ -149,16 +154,16 @@ class MyFunction(Function):
 class NeuralNet(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(NeuralNet, self).__init__()
-        self.enclave = LinearAlt()
-        self.fc1 = Linear(input_size, hidden_size) 
+        #self.enclave = LinearAlt()
+        self.fc1 = Linear(input_size, hidden_size, bias = None) 
         self.tanh = nn.Tanh()
-        self.fc2 = Linear(hidden_size, hidden_size)  
+        self.fc2 = Linear(hidden_size, hidden_size, bias = None)  
         self.tanh = nn.Tanh()
-        self.fc3 = Linear(hidden_size, hidden_size)
+        self.fc3 = Linear(hidden_size, hidden_size, bias = None)
         self.tanh = nn.Tanh()
-        self.fc4 = Linear(hidden_size, hidden_size)
+        self.fc4 = Linear(hidden_size, hidden_size, bias = None)
         self.tanh = nn.Tanh()
-        self.fc5 = Linear(hidden_size, num_classes)
+        self.fc5 = Linear(hidden_size, num_classes, bias = None)
 
 
 
@@ -167,7 +172,7 @@ class NeuralNet(nn.Module):
         #out = self.enclave(out)
         out = self.fc1(x)
         #For testing... will move later
-        out = self.enclave(out, self.fc1.weight)
+        #out = self.enclave(out, self.fc1.weight)
         out = self.tanh(out)
         out = self.fc2(out)
         out = self.tanh(out)
@@ -176,6 +181,7 @@ class NeuralNet(nn.Module):
         out = self.fc4(out)
         out = self.tanh(out)
         out = self.fc5(out)
+        print(out)
 
         return out
 
@@ -183,7 +189,7 @@ model = NeuralNet(input_size, hidden_size, num_classes).to(device)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
+optimizer = SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
 
 # Train the model
 total_step = len(train_loader)
@@ -193,8 +199,6 @@ for epoch in range(num_epochs):
         images = images.reshape(-1, 28*28).to(device)
         labels = labels.to(device)
         
-        #rand_mask = torch.ones(784)
-        #rand_mask2 = torch.ones(500)
         
         #for k in images:
         #    k = torch.add(k, rand_mask)
