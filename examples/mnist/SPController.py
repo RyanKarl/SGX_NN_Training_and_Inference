@@ -8,7 +8,7 @@ import sys
 import struct
 import numpy as np
 
-ENCLAVE_EXE_PATH = "./enclave_driver"
+ENCLAVE_EXE_PATH = "./app"
 TMPDIR = "/tmp/"
 #Name is of the writer
 FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
