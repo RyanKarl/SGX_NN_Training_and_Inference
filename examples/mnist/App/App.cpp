@@ -228,6 +228,10 @@ int SGX_CDECL main(int argc, char ** argv){
 int main(int argc, char ** argv){
 #endif
 
+  //Temporary method of randomness
+#define SEED 5
+  srand(SEED);
+
 
   //i and o are filenames of named pipe
   //sleepy not implemented

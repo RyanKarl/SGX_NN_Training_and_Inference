@@ -5,6 +5,7 @@
 #define ENCLAVE_FUNCTIONS_H
 
 #include <assert.h>
+#include <stdlib.h> //Need this for rand
 
 #include "Enclave_Defines.h"
 
