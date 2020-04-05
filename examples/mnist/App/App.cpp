@@ -29,6 +29,8 @@ malloc_consolidate();\
 #include "sgx_eid.h"     /* sgx_enclave_id_t */
 #include "sgx_urts.h"
 
+# include "Enclave_u.h"
+
 # include <pwd.h>
 # define MAX_PATH FILENAME_MAX
 
@@ -216,11 +218,7 @@ int initialize_enclave(void)
 
 #endif
 
-#ifndef NENCLAVE
-# include "Enclave_u.h"
-#else
-# include "../Enclave/Enclave.h"
-#endif
+#include "../Enclave/Enclave.h"
 
 
 #ifndef NENCLAVE
