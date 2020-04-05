@@ -40,7 +40,7 @@ enclave {
      */
     
     trusted {
-        int verify_and_activate([user_check] float * data, [in] int a_idx[MAT_DIM], [in] int b_idx[MAT_DIM], [in] int c_idx[MAT_DIM], [in] float ** data_out, [out] int matrix_n_out[MAT_DIM]);
+        int verify_and_activate([user_check] float * data, [in] int a_idx[2], [in] int b_idx[2], [in] int c_idx[2], [in] float ** data_out, [out] int matrix_n_out[2]);
     };
 
     /* 
