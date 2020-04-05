@@ -5,11 +5,14 @@
 #define ENCLAVE_FUNCTIONS_H
 
 #include <assert.h>
-#include <stdlib.h> //Need this for rand
+
 
 #include "Enclave_Defines.h"
 
-//Filler function
+#ifndef NENCLAVE
+# define rand_bits(r, n) (sgx_read_rand((unsigned char *) & r, n*sizeof(*r)))
+#else
+# include <stdlib.h> //Need this for rand
 inline void rand_bits(int * r, int n){
   assert(r);
   for(int i = 0; i < n; i++){
@@ -20,6 +23,9 @@ inline void rand_bits(int * r, int n){
   }
   return;
 }
+#endif
+
+
 
 //a, b, c are flattened 2d arrays
 //Can consider moving validation outside
