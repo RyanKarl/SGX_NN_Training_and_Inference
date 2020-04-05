@@ -1,8 +1,6 @@
 //enclave_functions.h
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
-//compile with --wrap=malloc_consolidate to intercept that function?
-
 #ifndef ENCLAVE_FUNCTIONS_H
 #define ENCLAVE_FUNCTIONS_H
 
@@ -12,28 +10,6 @@
 #include <assert.h>
 #include <unistd.h>
 #include <math.h>
-
-//DEBUG code
-/*
-#include <execinfo.h>
-#define NUM_FRAMES 10
-
-void __real_malloc_consolidate();
-
-void __wrap_malloc_consolidate(){
-  void * arr[NUM_FRAMES];
-  printf("malloc_consolidate called\n");
-  fflush(stdout);
-  size_t bt_size = backtrace(arr, NUM_FRAMES);
-  backtrace_symbols_fd(arr, bt_size, STDOUT_FILENO);
-  fflush(stdout);
-  __real_malloc_consolidate();
-  return;
-}
-*/
-
-
-
 
 #ifndef CHAR_BIT
 #define CHAR_BIT 8
@@ -46,8 +22,6 @@ void __wrap_malloc_consolidate(){
 #define INDEX_FLOATMAT(f, i, j, n) (f[(i*n)+(j)])
 #define INDEX_BITARR(f, i) (( (f[i / (sizeof(int)*CHAR_BIT)]) >> (i%(sizeof(int)*CHAR_BIT))) & 1)
 #define FLOAT_CMP(a, b) (a != b)
-
-
 
 //Filler function
 inline void rand_bits(int * r, int n){
@@ -150,23 +124,55 @@ int verify_frievald(float * data, int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_
 }
 
 //Return 1 if activation fails, 0 if successful
+//Assume data_out is already properly initialized
 int activate(float * data_in, int matrix_n[MAT_DIM], 
-  float ** data_out, int * matrix_n_out, int * alloc_new_data){
+  float * data_out, int * matrix_n_out){
   //Use the below if things are done in-place
   //data_outshape must have DATA_DIMENSIONS elements
-  //Set this to 0 if malloc is used for *data_out
-  *alloc_new_data = 0;
   for(unsigned int i = 0; i < MAT_DIM; i++){
     matrix_n_out[i] = matrix_n[i];
   }
 
-  *data_out = data_in;
   //Using tanh as the activation function
   for(int j = 0; j < matrix_n[0]*matrix_n[1]; j++){
-    (*data_out)[j] = tanh(data_in[j]);
+    data_out[j] = tanh(data_in[j]);
   }  
 
   return 0;
+}
+
+//Trust that data_in and data_out have the correct size
+//Buffers must be allocated outside the enclave!
+int verify_and_activate(float * data_in, int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_idx[MAT_DIM], float ** data_out, int matrix_n_out[MAT_DIM]){
+  //Copy data to enclave space
+  int mult_ptr_offset = (a_idx[0]*a_idx[1]) + (b_idx[0]*b_idx[1]);
+  int total_input_elts = mult_ptr_offset + (c_idx[0]*c_idx[1]);
+  float * enclave_data = malloc(total_input_elts*sizeof(float));
+  for(int i = 0; i < total_input_elts; i++){
+    enclave_data[i] = data_in[i];
+  }
+  
+  if(verify_frievald(enclave_data, a_idx, b_idx, c_idx)){
+    free(enclave_data);
+    enclave_data = NULL;
+    return 1;
+  }
+  
+  if(!*data_out){
+    *data_out = data_in + mult_ptr_offset;
+  }
+  
+  float * activation_buffer_enclave = enclave_data + mult_ptr_offset;
+  if(activate(activation_buffer_enclave, c_idx, *data_out, matrix_n_out)){
+    free(enclave_data);
+    enclave_data = NULL;
+    return 1;
+  }
+  
+  free(enclave_data);
+  enclave_data = NULL;
+  return 0;
+
 }
 
 #endif
