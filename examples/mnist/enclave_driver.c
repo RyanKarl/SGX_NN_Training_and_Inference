@@ -1,6 +1,6 @@
 //enclave_driver.c
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
-//gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -std=gnu99 -o enclave_driver
+//gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -std=gnu99 -o enclave_driver -lm
 
 //Defined first to go before other standard libs
 /*

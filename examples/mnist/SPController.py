@@ -149,10 +149,8 @@ class SPController:
       return None
     #If any dimension sizes are negative 1 this fails
     if -1 in response_sizes:
-      print("Frievald's Algorithm failed to verify!")
-      return np.asarray([]) #Return an empty list
-    #DEBUG
-    print(response_sizes)  
+      #print("Frievald's Algorithm failed to verify!")
+      return np.asarray([]) #Return an empty list 
         
     num_floats = 1
     for d in response_sizes:
@@ -196,10 +194,11 @@ class SPController:
 #An example of how to use the SubProcess Controller
 def main():
   size = int(sys.argv[1])
-  a = np.zeros((size, size), dtype=float)
-  b = np.zeros((size, size), dtype=float)
-  c = np.zeros((size, size), dtype=float)
+  a = np.ones((size, size), dtype=float)
+  b = np.ones((size, size), dtype=float)
+  c = a @ b
   arrs = [np.asarray(x) for x in [a, b, c]]
+
   
   #Use this to generate output without actually running the subprocess
   if '-f' in sys.argv:
@@ -209,7 +208,7 @@ def main():
   
   #initializes SPController
   spc = SPController(debug=False)
-  spc.start(verbose=3)
+  spc.start(verbose=0)
   num_tests = 4
   if(len(sys.argv) >= 2+1):
     num_tests = int(sys.argv[2])

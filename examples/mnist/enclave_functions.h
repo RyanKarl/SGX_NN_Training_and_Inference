@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
+#include <math.h>
 
 //DEBUG code
 /*
@@ -160,9 +161,9 @@ int activate(float * data_in, int matrix_n[MAT_DIM],
   }
 
   *data_out = data_in;
-
+  //Using tanh as the activation function
   for(int j = 0; j < matrix_n[0]*matrix_n[1]; j++){
-    (*data_out)[j] *= 2.0;
+    (*data_out)[j] = tanh(data_in[j]);
   }  
 
   return 0;
