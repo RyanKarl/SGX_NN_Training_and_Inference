@@ -23,13 +23,15 @@ malloc_consolidate();\
 #include <getopt.h>
 #include <malloc.h>
 
+#include "../Enclave/Enclave_Defines.h"
+
 #ifndef NENCLAVE
 
-#include "sgx_error.h"       /* sgx_status_t */
-#include "sgx_eid.h"     /* sgx_enclave_id_t */
-#include "sgx_urts.h"
+# include "sgx_error.h"       /* sgx_status_t */
+# include "sgx_eid.h"     /* sgx_enclave_id_t */
+# include "sgx_urts.h"
 
-# include "Enclave_u.h"
+# include "Enclave_u.h" //Enclave headers
 
 # include <pwd.h>
 # define MAX_PATH FILENAME_MAX

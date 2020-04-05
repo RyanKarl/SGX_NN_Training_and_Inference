@@ -1,23 +1,12 @@
-//enclave_functions.h
+//Enclave.h
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
 #ifndef ENCLAVE_FUNCTIONS_H
 #define ENCLAVE_FUNCTIONS_H
 
-
 #include <assert.h>
 
-#ifndef CHAR_BIT
-#define CHAR_BIT 8
-#endif
-
-#define NUM_MATRICES 3
-#define MAT_DIM 2
-#define K_PROBABILITY 2
-
-#define INDEX_FLOATMAT(f, i, j, n) (f[(i*n)+(j)])
-#define INDEX_BITARR(f, i) (( (f[i / (sizeof(int)*CHAR_BIT)]) >> (i%(sizeof(int)*CHAR_BIT))) & 1)
-#define FLOAT_CMP(a, b) (a != b)
+#include "Enclave_Defines.h"
 
 //Filler function
 inline void rand_bits(int * r, int n){
