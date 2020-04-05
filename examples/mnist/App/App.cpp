@@ -216,7 +216,11 @@ int initialize_enclave(void)
 
 #endif
 
-#include "../Enclave/Enclave.h"
+#ifndef NENCLAVE
+# include "Enclave_u.h"
+#else
+# include "../Enclave/Enclave.h"
+#endif
 
 
 #ifndef NENCLAVE
