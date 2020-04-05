@@ -25,6 +25,10 @@ malloc_consolidate();\
 
 #ifndef NENCLAVE
 
+#include "sgx_error.h"       /* sgx_status_t */
+#include "sgx_eid.h"     /* sgx_enclave_id_t */
+#include "sgx_urts.h"
+
 # include <pwd.h>
 # define MAX_PATH FILENAME_MAX
 
