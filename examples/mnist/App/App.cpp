@@ -406,8 +406,14 @@ int main(int argc, char ** argv){
     
     float * activation_data = NULL;
     int activation_n[MAT_DIM] = {0, 0};
-    
+#ifndef NENCLAVE    
+    int enclave_retcode;
+    sgx_status_t sgx_status = verify_and_activate(global_eid, &internal_ret, input, matrix_n[0], matrix_n[1], matrix_n[2], (float **) &activation_data, activation_n);
+    //Should probably check SGX status...
+#else
     int enclave_retcode = verify_and_activate(input, matrix_n[0], matrix_n[1], matrix_n[2], (float **) &activation_data, activation_n);
+#endif    
+    
     
     if(enclave_retcode){
     
