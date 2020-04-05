@@ -24,7 +24,7 @@ inline void rand_bits(int * r, int n){
   assert(r);
   for(int i = 0; i < n; i++){
     r[i] = 0;
-    for(int j = 0; j < sizeof(int)*CHAR_BIT; j++){
+    for(unsigned int j = 0; j < sizeof(int)*CHAR_BIT; j++){
       r[i] |= (int)((1 & rand()) << j);
     }
   }

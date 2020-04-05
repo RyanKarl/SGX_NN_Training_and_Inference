@@ -198,7 +198,7 @@ int initialize_enclave(void)
     }
 
     /* Step 3: save the launch token if it is updated */
-    if (updated == FALSE || fp == NULL) {
+    if ( (!updated) || fp == NULL) {
         /* if the token is not updated, or file handler is invalid, do not perform saving */
         if (fp != NULL) fclose(fp);
         return 0;
@@ -322,12 +322,10 @@ int main(int argc, char ** argv){
 #ifndef NENCLAVE  
   
   /* Initialize the enclave */
-  if (dummy){
-    if(initialize_enclave() < 0){
-        printf("Enter a character before exit ...\n");
-        getchar();
-        return -1; 
-    }
+  if(initialize_enclave() < 0){
+      printf("Enter a character before exit ...\n");
+      getchar();
+      return -1; 
   }
   
 #endif  
@@ -380,7 +378,7 @@ int main(int argc, char ** argv){
     }
 
     //Allocate array of floats for data
-    float * input = malloc((unsigned int) num_in * sizeof(float));
+    float * input = (float *) malloc((unsigned int) num_in * sizeof(float));
     if(!input){
       fprintf(stderr, "ERROR: malloc failed\n");
       return -1;

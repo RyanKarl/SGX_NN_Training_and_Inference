@@ -19,7 +19,7 @@ int frievald(float * a, float * b, float * c,
   assert(c_idx[1] == b_idx[1]);
   //Create a random vector r
   
-  int * r = calloc(b_idx[1], sizeof(int));
+  int * r = (int *) calloc(b_idx[1], sizeof(int));
   if(!r){
     assert(r && "calloc failed");
   }
@@ -27,8 +27,8 @@ int frievald(float * a, float * b, float * c,
 
   //Hope that calloc properly sets bits to 0
   //Calculate br, cr in the same loop
-  float * br = calloc(b_idx[1], sizeof(float));
-  float * cr = calloc(c_idx[1], sizeof(float));
+  float * br = (float *) calloc(b_idx[1], sizeof(float));
+  float * cr = (float *) calloc(c_idx[1], sizeof(float));
   if(!br){
     assert(br && "malloc failed");
   }
@@ -50,7 +50,7 @@ int frievald(float * a, float * b, float * c,
   free(r);
   r = NULL;
 
-  float * axbr = calloc(b_idx[0], sizeof(float));
+  float * axbr = (float *) calloc(b_idx[0], sizeof(float));
   if(!axbr){
     assert(axbr && "malloc failed");
   }
@@ -114,7 +114,7 @@ int verify_and_activate(float * data_in, int a_idx[MAT_DIM], int b_idx[MAT_DIM],
   //Copy data to enclave space
   int mult_ptr_offset = (a_idx[0]*a_idx[1]) + (b_idx[0]*b_idx[1]);
   int total_input_elts = mult_ptr_offset + (c_idx[0]*c_idx[1]);
-  float * enclave_data = malloc(total_input_elts*sizeof(float));
+  float * enclave_data = (float *) malloc(total_input_elts*sizeof(float));
   for(int i = 0; i < total_input_elts; i++){
     enclave_data[i] = data_in[i];
   }
