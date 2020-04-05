@@ -9,6 +9,10 @@
 
 #include "Enclave_Defines.h"
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 #ifndef NENCLAVE
 # define rand_bits(r, n) (sgx_read_rand((unsigned char *) & r, n*sizeof(*r)))
 #else
@@ -43,5 +47,9 @@ int activate(float * data_in, int matrix_n[MAT_DIM],
 //Trust that data_in and data_out have the correct size
 //Buffers must be allocated outside the enclave!
 int verify_and_activate(float * data_in, int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_idx[MAT_DIM], float ** data_out, int matrix_n_out[MAT_DIM]);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif
