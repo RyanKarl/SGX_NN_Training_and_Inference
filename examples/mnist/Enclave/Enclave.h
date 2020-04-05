@@ -10,6 +10,7 @@
 #include "Enclave_Defines.h"
 
 #ifndef NENCLAVE
+# include <sgx_trts.h>
 # define rand_bits(r, n) (sgx_read_rand((unsigned char *) & r, n*sizeof(*r)))
 #else
 # include <stdlib.h> //Need this for rand
