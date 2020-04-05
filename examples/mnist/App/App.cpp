@@ -1,4 +1,4 @@
-//enclave_driver.c
+//App.cpp
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 //gcc ./enclave_driver.c -pedantic -Wall -Werror -O3 -std=gnu99 -o enclave_driver -lm -DNENCLAVE
 
@@ -212,7 +212,7 @@ int initialize_enclave(void)
 
 #endif
 
-#include "enclave_functions.h"
+#include "../Enclave/Enclave.h"
 
 
 #ifndef NENCLAVE
