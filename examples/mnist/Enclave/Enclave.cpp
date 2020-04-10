@@ -23,12 +23,12 @@ int frievald(float * a, float * b, float * c,
   assert(c_idx[0] == a_idx[0]);
   assert(c_idx[1] == b_idx[1]);
   //Create a random vector r
-  
-  int * r = (int *) calloc(b_idx[1], sizeof(int));
+  size_t num_bytes_randarr = (b_idx[1]/sizeof(unsigned char)) + (b_idx[1]%sizeof(unsigned char)? 1 : 0);
+  unsigned char * r = (unsigned char *) calloc(num_bytes_randarr, sizeof(unsigned char));
   if(!r){
     assert(r && "calloc failed");
   }
-  rand_bits(r, b_idx[1]);
+  rand_bytes(r, num_bytes_randarr);
 
   //Hope that calloc properly sets bits to 0
   //Calculate br, cr in the same loop
@@ -42,13 +42,13 @@ int frievald(float * a, float * b, float * c,
   }
   for (int i = 0; i < b_idx[0]; i++){
       for (int j = 0; j < b_idx[1]; j++){
-          br[i] += INDEX_FLOATMAT(b, i, j, b_idx[0]) * ((int)INDEX_BITARR(r, j));
+          br[i] += INDEX_FLOATMAT(b, i, j, b_idx[0]) * ((unsigned char)INDEX_BITARR(r, j));
       }
   }
 
   for (int i = 0; i < c_idx[0]; i++){
       for (int j = 0; j < c_idx[1]; j++){
-          cr[i] += INDEX_FLOATMAT(c, i, j, c_idx[0]) * ((int)INDEX_BITARR(r, j));
+          cr[i] += INDEX_FLOATMAT(c, i, j, c_idx[0]) * ((unsigned char)INDEX_BITARR(r, j));
       }
   }
 

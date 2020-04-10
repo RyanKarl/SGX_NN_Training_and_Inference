@@ -10,7 +10,8 @@
 # define K_PROBABILITY 2
 
 # define INDEX_FLOATMAT(f, i, j, n) (f[(i*n)+(j)])
-# define INDEX_BITARR(f, i) (( (f[i / (sizeof(int)*CHAR_BIT)]) >> (i%(sizeof(int)*CHAR_BIT))) & 1)
+//Assumes f is a char *
+# define INDEX_BITARR(f, i) (( (f[i / CHAR_BIT]) >> (i%CHAR_BIT)) & 1)
 # define FLOAT_CMP(a, b) (a != b)
 
 
