@@ -12,7 +12,7 @@ extern "C" {
 
 #ifndef NENCLAVE
 # include <sgx_trts.h>
-# define rand_bytes(r, n_bytes) (sgx_read_rand((unsigned char *) & r, n_bytes) )
+# define rand_bytes(r, n_bytes) (sgx_read_rand((unsigned char *) r, n_bytes) )
 #else
 # include <stdlib.h> //Need this for rand
 # include <assert.h>
