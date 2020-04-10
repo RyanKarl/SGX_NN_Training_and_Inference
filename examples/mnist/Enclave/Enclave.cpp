@@ -19,7 +19,7 @@ int frievald(float * a, float * b, float * c,
   assert(c_idx[0] == a_idx[0]);
   assert(c_idx[1] == b_idx[1]);
   //Create a random vector r
-  size_t num_bytes_randarr = (b_idx[1]/sizeof(unsigned char)) + (b_idx[1]%sizeof(unsigned char)? 1 : 0);
+  size_t num_bytes_randarr = (b_idx[1]/CHAR_BIT) + (b_idx[1]%CHAR_BIT? 1 : 0);
   unsigned char * r = (unsigned char *) calloc(num_bytes_randarr, sizeof(unsigned char));
   if(!r){
     assert(r && "calloc failed");

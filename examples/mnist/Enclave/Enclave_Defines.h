@@ -1,6 +1,7 @@
 #ifndef ENCLAVE_GLOBALS_H
 #define ENCLAVE_GLOBALS_H
 
+#include <limits.h>
 # ifndef CHAR_BIT
 # define CHAR_BIT 8
 # endif
