@@ -1,7 +1,7 @@
 //enclave_functions.c
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
-#include <malloc.h>
+//#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
