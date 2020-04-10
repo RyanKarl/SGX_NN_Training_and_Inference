@@ -1,10 +1,6 @@
 //enclave_functions.c
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
-#ifndef NENCLAVE
-# include <sgx-malloc.h>
-#endif
-
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
