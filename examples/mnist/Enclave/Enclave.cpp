@@ -104,7 +104,7 @@ int activate(float * data_in, int matrix_n[MAT_DIM],
   }
 
   //Using tanh as the activation function
-  for(int j = 0; j < matrix_n[0]*matrix_n[1]; j++){
+  for(unsigned int j = 0; j < matrix_n[0]*matrix_n[1]; j++){
     data_out[j] = tanh(data_in[j]);
   }  
 
