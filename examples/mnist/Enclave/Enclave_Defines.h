@@ -15,5 +15,9 @@
 # define INDEX_BITARR(f, i) (( (f[i / CHAR_BIT]) >> (i%CHAR_BIT)) & 1)
 # define FLOAT_CMP(a, b) (a != b)
 
+typedef struct {
+	int height;
+	int width;
+} mat_dim_t;
 
 #endif

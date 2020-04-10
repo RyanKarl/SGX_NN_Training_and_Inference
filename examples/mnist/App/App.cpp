@@ -343,7 +343,7 @@ int main(int argc, char ** argv){
   while(1){
     //Shape of input data
     //Assumes a linear buffer
-    int matrix_n[NUM_MATRICES][MAT_DIM];
+    mat_dim_t matrix_n[NUM_MATRICES];
     //Get number of bytes from pipe
     if(verbose){
       fprintf(stdout, "About to get header (%li bytes)\n", sizeof(matrix_n));
@@ -351,7 +351,7 @@ int main(int argc, char ** argv){
     }
     
     //Dangerous cast - works because array is entirely contiguous
-    if(!fread((int*) matrix_n, sizeof(int), NUM_MATRICES*MAT_DIM, instream)){
+    if(!fread((void *) matrix_n, sizeof(mat_dim_t), NUM_MATRICES, instream)){
       fprintf(stderr, "ERROR: could not read header\n");
       fflush(stderr);
       return 1;
@@ -360,9 +360,7 @@ int main(int argc, char ** argv){
     if(verbose >= 2){
       fprintf(stdout, "Matrix dimensions received: ");
       for(unsigned int i = 0; i < NUM_MATRICES; i++){
-        for(unsigned int j = 0; j < MAT_DIM; j++){
-          fprintf(stdout, "%d ", matrix_n[i][j]);
-        }
+        fprintf(stdout, "%d %d ", matrix_n[i].height, matrix_n[i].width);
       }
       fprintf(stdout, "\n");
     }
@@ -371,11 +369,7 @@ int main(int argc, char ** argv){
     //Read in data
     int num_in = 0;
     for(unsigned int i = 0; i < NUM_MATRICES; i++){
-      int mat_size = 1;
-      for(unsigned int j = 0; j < MAT_DIM; j++){
-        mat_size *= matrix_n[i][j];
-      }
-      num_in += mat_size;
+      num_in += matrix_n[i].height * matrix_n[i].width;
     }
     
     //num_bytes_in should be product of matrix dimensions i.e. 3*4*5 = 60 times sizeof(float)
@@ -409,13 +403,18 @@ int main(int argc, char ** argv){
     }
     
     float * activation_data = NULL;
-    int activation_n[MAT_DIM] = {0, 0};
+    mat_dim_t activation_n = matrix_n[2]; //Assign output to be the same size as input - this is untrusted's responsibility!
+    activation_data = (float *) malloc(sizeof(float)*activation_n.width*activation_n.height);
+    if(!activation_data){
+      fprintf(stderr, "ERROR: malloc failed");
+      return 1;
+    }
 #ifndef NENCLAVE    
     int enclave_retcode;
-    sgx_status_t sgx_status = verify_and_activate(global_eid, &enclave_retcode, input, matrix_n[0], matrix_n[1], matrix_n[2], (float **) &activation_data, activation_n);
+    sgx_status_t sgx_status = verify_and_activate(global_eid, &enclave_retcode, input, matrix_n[0], matrix_n[1], matrix_n[2], activation_data, activation_n);
     //Should probably check SGX status...
 #else
-    int enclave_retcode = verify_and_activate(input, matrix_n[0], matrix_n[1], matrix_n[2], (float **) &activation_data, activation_n);
+    int enclave_retcode = verify_and_activate(input, matrix_n[0], matrix_n[1], matrix_n[2], activation_data, activation_n);
 #endif    
     
     
@@ -438,7 +437,7 @@ int main(int argc, char ** argv){
       
     //Send header with length
     //Another dangerous cast
-    if((!fwrite((int *) activation_n, sizeof(activation_n[0]), MAT_DIM, outstream)) || fflush(outstream)){
+    if((!fwrite((void *) &activation_n, sizeof(activation_n), 1, outstream)) || fflush(outstream)){
       fprintf(stderr, "ERROR: could not write header\n");
       fflush(stderr);
       return 1;
@@ -450,10 +449,10 @@ int main(int argc, char ** argv){
       }
     }
     
-    int activated_size = activation_n[0]*activation_n[1];
+    int activated_size = activation_n.width*activation_n.height;
     
     if(verbose >= 2){
-      fprintf(stdout, "Sent output header: %ld bytes\n", MAT_DIM*sizeof(activation_n[0]));
+      fprintf(stdout, "Sent output header: %ld bytes\n", sizeof(activation_n));
       if(verbose >= 3){
         fprintf(stdout, "Sending %d float outputs: ", activated_size);
         for(int i = 0; i < activated_size; i++){

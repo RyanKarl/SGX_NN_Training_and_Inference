@@ -36,19 +36,19 @@ inline void rand_bytes(unsigned char * r, size_t n_bytes){
 //a, b, c are flattened 2d arrays
 //Can consider moving validation outside
 int frievald(float * a, float * b, float * c, 
-  int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_idx[MAT_DIM]);
+  mat_dim_t a_idx, mat_dim_t b_idx, mat_dim_t c_idx);
 
 //Return 1 if verification fails, 0 if successful
-int verify_frievald(float * data, int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_idx[MAT_DIM]);
+int verify_frievald(float * data, mat_dim_t a_idx, mat_dim_t b_idx, mat_dim_t c_idx);
 
 //Return 1 if activation fails, 0 if successful
 //Assume data_out is already properly initialized
-int activate(float * data_in, int matrix_n[MAT_DIM], 
-  float * data_out, int * matrix_n_out);
+int activate(float * data_in, mat_dim_t matrix_n, 
+  float * data_out, mat_dim_t matrix_n_out); //Reference or value?
 
 //Trust that data_in and data_out have the correct size
 //Buffers must be allocated outside the enclave!
-int verify_and_activate(float * data_in, int a_idx[MAT_DIM], int b_idx[MAT_DIM], int c_idx[MAT_DIM], float ** data_out, int matrix_n_out[MAT_DIM]);
+int verify_and_activate(float * data_in, mat_dim_t a_idx, mat_dim_t b_idx, mat_dim_t c_idx, float * data_out, mat_dim_t matrix_n_out);
 
 #if defined(__cplusplus)
 }
