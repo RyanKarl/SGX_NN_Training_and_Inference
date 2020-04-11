@@ -21,8 +21,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 10
-batch_size = 2048
+num_epochs = 1
+batch_size = 50000
 learning_rate = .1
 
 # MNIST dataset 
@@ -172,15 +172,18 @@ class NeuralNet(nn.Module):
         
         #out = self.enclave(out)
         out = self.fc1(x)
+        out = self.tanh(out)
         #For testing... will move later
         #out = self.enclave(out, self.fc1.weight)
         out = self.fc2(out)
+        out = self.tanh(out)
         out = self.fc3(out)
+        out = self.tanh(out)
         out = self.fc4(out)
+        out = self.tanh(out)
         out = self.fc5(out)
-        out = out - 1
         out = self.sm(out)
-        print(out)
+        # print(out)
         # print(out)
 
         return out
@@ -224,7 +227,7 @@ with torch.no_grad():
     for images, labels in test_loader:
         images = images.reshape(-1, 28*28).to(device)
         labels = labels.to(device)
-        outputs = model(images)
+        outputs = model(images + 1)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()

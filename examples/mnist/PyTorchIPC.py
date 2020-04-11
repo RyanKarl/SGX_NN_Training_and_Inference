@@ -24,6 +24,7 @@ def SGXF(input, weight):
 
 def SGXB(grad_output, input, weight):
     
+    print(grad_output)
     rand_mask = torch.ones(input.shape, device = "cuda:0")
     weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
     grad_rand_mask = torch.zeros(grad_output.shape, device = "cuda:0")
