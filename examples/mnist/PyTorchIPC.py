@@ -4,6 +4,31 @@ import numpy as np
 import torch
 from SPController import SPController
 
+def SGXF(input, weight):
+    rand_mask = torch.ones(input.shape)
+
+    a = input - rand_mask
+    b = weights - rand_mask
+
+    c = a @ b
+
+    return c + rand_mask
+
+
+def SGXB(grad_output, input, weight):
+    
+    rand_mask = torch.ones(input.shape)
+
+    a = input - rand_mask
+    b = weight - rand_mask
+    c = grad_output - rand_mask
+
+    d = c @ b
+
+    e = c.t().mm(a)
+
+    return d, e
+
 class MyFunction2(Function):
     # Note that both forward and backward are @staticmethods
     @staticmethod
@@ -21,22 +46,20 @@ class MyFunction2(Function):
         #saves masked input and masked weights for fast backwards gpu pass
         ctx.save_for_backward(input, weight, bias)
         
-        rand_mask = torch.ones(input.shape)
+        # rand_mask = torch.ones(input.shape)
 
-        input = input + rand_mask
+        # input = input + rand_mask
         #weight = weight + weight_rand_mask
 
-        output = input.mm(weight.t())
+        # output = input.mm(weight.t())
         
-        rand_mask = rand_mask.mm(weight.t())
-        output = output - rand_mask #- weight_rand_mask
+        # rand_mask = rand_mask.mm(weight.t())
+        # output = output - rand_mask #- weight_rand_mask
 
         # masked_ouput = masked_input @ masked_weights
         # decrypted_output = maksed_output - random_matrix @ true_weights + (not so) extreme foiling
 
-        sgx_freevalt()
-
-        
+        SGXF(input, weight)
 
         #lalala sgx stuff
         # input = input.detach().numpy()
@@ -63,6 +86,8 @@ class MyFunction2(Function):
         input, weight, bias = ctx.saved_tensors
         grad_input = grad_weight = grad_bias = None
 
+
+
         #rewrite all these functions to page to SGX and send back error with random noise
         if ctx.needs_input_grad[0]:
             grad_input = grad_output.mm(weight)
@@ -71,7 +96,8 @@ class MyFunction2(Function):
         if bias is not None and ctx.needs_input_grad[2]:
             grad_bias = grad_output.sum(0)
 
-        return grad_output, grad_weight, grad_bias, None 
+        a,b = SGXB(grad_input, input, weight)
+        return a, b, grad_bias, None 
 
 
 

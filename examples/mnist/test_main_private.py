@@ -155,15 +155,16 @@ class NeuralNet(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(NeuralNet, self).__init__()
         #self.enclave = LinearAlt()
-        self.fc1 = Linear(input_size, hidden_size, bias = None) 
+        self.fc1 = LinearAlt(input_size, hidden_size, bias = None) 
         self.tanh = nn.Tanh()
-        self.fc2 = Linear(hidden_size, hidden_size, bias = None)  
+        self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
         self.tanh = nn.Tanh()
-        self.fc3 = Linear(hidden_size, hidden_size, bias = None)
+        self.fc3 = LinearAlt(hidden_size, hidden_size, bias = None)
         self.tanh = nn.Tanh()
-        self.fc4 = Linear(hidden_size, hidden_size, bias = None)
+        self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
         self.tanh = nn.Tanh()
-        self.fc5 = Linear(hidden_size, num_classes, bias = None)
+        self.fc5 = LinearAlt(hidden_size, num_classes, bias = None)
+        self.sm = nn.Softmax()
 
 
 
@@ -181,6 +182,7 @@ class NeuralNet(nn.Module):
         out = self.fc4(out)
         out = self.tanh(out)
         out = self.fc5(out)
+        out = self.sm(out)
         print(out)
 
         return out
@@ -199,6 +201,7 @@ for epoch in range(num_epochs):
         images = images.reshape(-1, 28*28).to(device)
         labels = labels.to(device)
         
+        images += 1
         
         #for k in images:
         #    k = torch.add(k, rand_mask)

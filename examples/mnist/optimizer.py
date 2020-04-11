@@ -111,7 +111,7 @@ class SGD(Optimizer):
 
                 #p.data.add_(-group['lr'], d_p)
                 
-                rand_mask = torch.ones(p.shape)
+                # rand_mask = torch.ones(p.shape)
                
                 
 
@@ -119,10 +119,12 @@ class SGD(Optimizer):
                 #p.data.add(rand_mask)
 
                 #d_p -= rand_mask
-                p.data -= rand_mask
+                # p.data -= rand_mask
 
-                p.data.add_(-group['lr'], d_p)
-                p.data += rand_mask
+                # p.data.add_(-group['lr'], d_p)
+                # p.data += rand_mask
+
+                sec_update(p.data, d_p, group['lr'])
 
                 #We pass p.data
                 #Here we page SGX with masked updated weights
@@ -133,4 +135,11 @@ class SGD(Optimizer):
 
         return loss
 
+
+def sec_update(data, d_p, lr):
+    data.add_(-1, 1)
+    f = d_p - 1
+
+    data.add_(lr, f)
+    data.add_(1, 1)
 
