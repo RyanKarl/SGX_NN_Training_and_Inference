@@ -1,31 +1,44 @@
 from torch.autograd import Function
 import torch.nn as nn
+import torch
 import numpy as np
 import torch
 from SPController import SPController
 
 def SGXF(input, weight):
-    rand_mask = torch.ones(input.shape)
+    rand_mask = torch.ones(input.shape, device = "cuda:0")
+
+    weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
 
     a = input - rand_mask
-    b = weights - rand_mask
+    b = weight - weight_rand_mask
 
-    c = a @ b
+    c = a @ b.t()
+    # print(c)
 
-    return c + rand_mask
+    rand_mask = torch.ones(c.shape, device = "cuda:0")
+    out = c + rand_mask
+
+    return out
 
 
 def SGXB(grad_output, input, weight):
     
-    rand_mask = torch.ones(input.shape)
+    rand_mask = torch.ones(input.shape, device = "cuda:0")
+    weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
+    grad_rand_mask = torch.zeros(grad_output.shape, device = "cuda:0")
 
     a = input - rand_mask
-    b = weight - rand_mask
-    c = grad_output - rand_mask
+    b = weight - weight_rand_mask
+    c = grad_output #- grad_rand_mask
 
     d = c @ b
 
     e = c.t().mm(a)
+    # print(e)
+
+    rand_mask = torch.zeros(d.shape, device = "cuda:0")
+    weight_rand_mask = torch.zeros(e.shape, device = "cuda:0")
 
     return d, e
 
@@ -59,7 +72,7 @@ class MyFunction2(Function):
         # masked_ouput = masked_input @ masked_weights
         # decrypted_output = maksed_output - random_matrix @ true_weights + (not so) extreme foiling
 
-        SGXF(input, weight)
+        output = SGXF(input, weight)
 
         #lalala sgx stuff
         # input = input.detach().numpy()
@@ -96,7 +109,7 @@ class MyFunction2(Function):
         if bias is not None and ctx.needs_input_grad[2]:
             grad_bias = grad_output.sum(0)
 
-        a,b = SGXB(grad_input, input, weight)
+        a,b = SGXB(grad_output, input, weight)
         return a, b, grad_bias, None 
 
 
@@ -108,6 +121,7 @@ class LinearAlt(nn.Module):
 
         # self.spc = SPController()
         # self.spc.start(verbose=True)
+        self.spc = None
 
         self.input_features = input_features
         self.output_features = output_features
@@ -120,6 +134,7 @@ class LinearAlt(nn.Module):
             self.register_parameter('bias', None)
 
         self.weight.data.uniform_(-0.1, 0.1)
+        self.weight.data.add_(1, 1)
         if bias is not None:
             self.bias.data.uniform_(-0.1, 0.1)
 

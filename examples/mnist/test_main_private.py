@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 import time
 import numpy as np
 from PyTorchIPC import LinearAlt
-from optimizer import SGD
+from optimizer import SGD, MyLoss
 
 #Force Determinism
 torch.manual_seed(0)
@@ -22,8 +22,8 @@ input_size = 784
 hidden_size = 500
 num_classes = 10
 num_epochs = 10
-batch_size = 50000
-learning_rate = 0.05
+batch_size = 2048
+learning_rate = .1
 
 # MNIST dataset 
 train_dataset = torchvision.datasets.MNIST(root='../../data', 
@@ -174,23 +174,22 @@ class NeuralNet(nn.Module):
         out = self.fc1(x)
         #For testing... will move later
         #out = self.enclave(out, self.fc1.weight)
-        out = self.tanh(out)
         out = self.fc2(out)
-        out = self.tanh(out)
         out = self.fc3(out)
-        out = self.tanh(out)
         out = self.fc4(out)
-        out = self.tanh(out)
         out = self.fc5(out)
+        out = out - 1
         out = self.sm(out)
         print(out)
+        # print(out)
 
         return out
 
 model = NeuralNet(input_size, hidden_size, num_classes).to(device)
 
+
 # Loss and optimizer
-criterion = nn.CrossEntropyLoss()
+criterion = MyLoss()
 optimizer = SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
 
 # Train the model
@@ -213,9 +212,9 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
         
-        if (i+1) % 100 == 0:
-            print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
-                   .format(epoch+1, num_epochs, i+1, total_step, loss.item()))
+        # if (i+1) % 100 == 0:
+        print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
+                .format(epoch+1, num_epochs, i+1, total_step, loss.item()))
 
 # Test the model
 # In test phase, we don't need to compute gradients (for memory efficiency)
