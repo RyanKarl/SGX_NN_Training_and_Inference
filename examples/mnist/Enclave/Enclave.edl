@@ -40,7 +40,7 @@ enclave {
      */
     
     trusted {
-        public int verify_and_activate([user_check] float * data_in, [in] int a_height, [in] int a_width, [in] int b_height, [in] int b_width, [in] int c_height, [in] int c_width, [user_check] float * data_out, [in] int out_height, [in] int out_width);
+        public int verify_and_activate([user_check] float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width, [user_check] float * data_out, int out_height, int out_width);
     };
 
     /* 
