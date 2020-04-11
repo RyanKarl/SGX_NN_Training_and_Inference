@@ -38,14 +38,9 @@ enclave {
      *  [import]: specifies the functions to import, 
      *  [*]: implies to import all functions.
      */
-
-     typedef struct {
-        int height;
-        int width;
-     } mat_dim_t;
     
     trusted {
-        public int verify_and_activate([user_check] float * data_in, [in] mat_dim_t a_idx, [in] mat_dim_t b_idx, [in] mat_dim_t c_idx, [user_check] float * data_out, [in] mat_dim_t matrix_n_out);
+        public int verify_and_activate([user_check] float * data_in, [in] int a_height, [in] int a_width, [in] int b_height, [in] int b_width, [in] int c_height, [in] int c_width, [user_check] float * data_out, [in] int out_height, [in] int out_width);
     };
 
     /* 

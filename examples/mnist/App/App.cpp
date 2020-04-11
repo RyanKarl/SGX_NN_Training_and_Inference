@@ -411,10 +411,12 @@ int main(int argc, char ** argv){
     }
 #ifndef NENCLAVE    
     int enclave_retcode;
-    sgx_status_t sgx_status = verify_and_activate(global_eid, &enclave_retcode, input, matrix_n[0], matrix_n[1], matrix_n[2], activation_data, activation_n);
+    sgx_status_t sgx_status = verify_and_activate(global_eid, &enclave_retcode, input, matrix_n[0], matrix_n[1], matrix_n[2], 
+      activation_data, activation_n);
     //Should probably check SGX status...
 #else
-    int enclave_retcode = verify_and_activate(input, matrix_n[0], matrix_n[1], matrix_n[2], activation_data, activation_n);
+    int enclave_retcode = verify_and_activate(input, matrix_n[0].height, matrix_n[0].width, matrix_n[1].height, matrix_n[1].width,
+     matrix_n[2].height, matrix_n[2].width, activation_data, activation_n.height, activation_n.width);
 #endif    
     
     
