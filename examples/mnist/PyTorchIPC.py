@@ -17,25 +17,30 @@ def SGXF(input, weight):
     # print(c)
 
     rand_mask = torch.ones(c.shape, device = "cuda:0")
-    out = c + rand_mask
+    out = torch.tanh(c) + rand_mask
 
     return out
 
 
 def SGXB(grad_output, input, weight):
     
-    print(grad_output)
+    # print(grad_output)
     rand_mask = torch.ones(input.shape, device = "cuda:0")
     weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
     grad_rand_mask = torch.zeros(grad_output.shape, device = "cuda:0")
 
     a = input - rand_mask
     b = weight - weight_rand_mask
-    c = grad_output #- grad_rand_mask
+    c = grad_output.clone() #- grad_rand_mask
+
+    c = c * (1-torch.tanh(a @ b.t())**2)
+    # a = 1-torch.tanh(a)**2
+    # print(c)
 
     d = c @ b
 
     e = c.t().mm(a)
+    
     # print(e)
 
     rand_mask = torch.zeros(d.shape, device = "cuda:0")
@@ -100,6 +105,8 @@ class MyFunction2(Function):
         input, weight, bias = ctx.saved_tensors
         grad_input = grad_weight = grad_bias = None
 
+        
+
 
 
         #rewrite all these functions to page to SGX and send back error with random noise
@@ -109,7 +116,6 @@ class MyFunction2(Function):
             grad_weight = grad_output.t().mm(input)
         if bias is not None and ctx.needs_input_grad[2]:
             grad_bias = grad_output.sum(0)
-
         a,b = SGXB(grad_output, input, weight)
         return a, b, grad_bias, None 
 

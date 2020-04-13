@@ -21,8 +21,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 1
-batch_size = 50000
+num_epochs = 10
+batch_size = 2048
 learning_rate = .1
 
 # MNIST dataset 
@@ -156,13 +156,13 @@ class NeuralNet(nn.Module):
         super(NeuralNet, self).__init__()
         #self.enclave = LinearAlt()
         self.fc1 = LinearAlt(input_size, hidden_size, bias = None) 
-        self.tanh = nn.Tanh()
+        # self.tanh = nn.Tanh()
         self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
-        self.tanh = nn.Tanh()
+        # self.tanh = nn.Tanh()
         self.fc3 = LinearAlt(hidden_size, hidden_size, bias = None)
-        self.tanh = nn.Tanh()
+        # self.tanh = nn.Tanh()
         self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
-        self.tanh = nn.Tanh()
+        # self.tanh = nn.Tanh()
         self.fc5 = LinearAlt(hidden_size, num_classes, bias = None)
         self.sm = nn.Softmax()
 
@@ -172,15 +172,15 @@ class NeuralNet(nn.Module):
         
         #out = self.enclave(out)
         out = self.fc1(x)
-        out = self.tanh(out)
+        # out = self.tanh(out)
         #For testing... will move later
         #out = self.enclave(out, self.fc1.weight)
         out = self.fc2(out)
-        out = self.tanh(out)
+        # out = self.tanh(out)
         out = self.fc3(out)
-        out = self.tanh(out)
+        # out = self.tanh(out)
         out = self.fc4(out)
-        out = self.tanh(out)
+        # out = self.tanh(out)
         out = self.fc5(out)
         out = self.sm(out)
         # print(out)
