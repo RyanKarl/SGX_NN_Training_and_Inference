@@ -5,7 +5,7 @@ import torchvision
 import torchvision.transforms as transforms
 import time
 import numpy as np
-from PyTorchIPC import LinearAlt
+from PyTorchIPC import LinearAlt, ConvAlt
 from optimizer import SGD, MyLoss
 
 #Force Determinism
@@ -21,8 +21,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 10
-batch_size = 2048
+num_epochs = 1
+batch_size = 128
 learning_rate = .1
 
 # MNIST dataset 
@@ -44,142 +44,46 @@ test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                           batch_size=batch_size, 
                                           shuffle=False)
 
-class Linear(nn.Module):
-    def __init__(self, input_features, output_features, bias=True):
-        super(Linear, self).__init__()
-        self.input_features = input_features
-        self.output_features = output_features
-
-        # nn.Parameter is a special kind of Tensor, that will get
-        # automatically registered as Module's parameter once it's assigned
-        # as an attribute. Parameters and buffers need to be registered, or
-        # they won't appear in .parameters() (doesn't apply to buffers), and
-        # won't be converted when e.g. .cuda() is called. You can use
-        # .register_buffer() to register buffers.
-        # nn.Parameters require gradients by default.
-        self.weight = nn.Parameter(torch.Tensor(output_features, input_features))
-        if bias:
-            self.bias = nn.Parameter(torch.Tensor(output_features))
-        else:
-            # You should always register all possible parameters, but the
-            # optional ones can be None if you want.
-            self.register_parameter('bias', None)
-
-        # Not a very smart way to initialize weights
-        self.weight.data.uniform_(-0.1, 0.1)
-        self.weight.data += torch.ones(self.weight.shape)
-        
-        if bias is not None:
-            self.bias.data.uniform_(-0.1, 0.1)
-
-    def forward(self, input):
-        # See the autograd section for explanation of what happens here.
-        return MyFunction.apply(input, self.weight, self.bias)
-
-    def extra_repr(self):
-        # (Optional)Set the extra information about this module. You can test
-        # it by printing an object of this class.
-        return 'in_features={}, out_features={}, bias={}'.format(
-            self.in_features, self.out_features, self.bias is not None
-        )
-
-
-# Inherit from Function
-class MyFunction(Function):
-
-    # Note that both forward and backward are @staticmethods
-    @staticmethod
-    # bias is an optional argument
-    def forward(ctx, input, weight, bias=None):
-        rand_mask = torch.ones(input.shape)
-        weight_rand_mask = torch.ones(weight.shape)
-
-        ctx.save_for_backward(input, weight, bias)
-        input = input + rand_mask
-        #weight = weight + weight_rand_mask
-
-        output = input.mm(weight.t())
-        
-        rand_mask = rand_mask.mm(weight.t())
-        output = output - rand_mask #- weight_rand_mask
-        
-        if bias is not None:
-            #bias_rand_mask = torch.ones(output.shape)
-            #bias = bias + bias_rand_mask
-            output += bias.unsqueeze(0).expand_as(output)
-            #output = output - bias_rand_mask
-        #print("Forward Output: ")
-        #print(output) 
-        #time.sleep(5)
-
-
-        return output
-
-    def eval(ctx, input, weight, bias=None):
-        weight = weight - torch.ones(weight.shape) 
-        output = input.mm(weight.t())
-        
-        return output
-
-    # This function has only a single output, so it gets only one gradient
-    @staticmethod
-    def backward(ctx, grad_output):
-        # This is a pattern that is very convenient - at the top of backward
-        # unpack saved_tensors and initialize all gradients w.r.t. inputs to
-        # None. Thanks to the fact that additional trailing Nones are
-        # ignored, the return statement is simple even when the function has
-        # optional inputs.
-        input, weight, bias = ctx.saved_tensors
-        grad_input = grad_weight = grad_bias = None
-
-        # These needs_input_grad checks are optional and there only to
-        # improve efficiency. If you want to make your code simpler, you can
-        # skip them. Returning gradients for inputs that don't require it is
-        # not an error.
-        if ctx.needs_input_grad[0]:
-            grad_input = grad_output.mm(weight)
-        if ctx.needs_input_grad[1]:
-            grad_weight = grad_output.t().mm(input)
-        if bias is not None and ctx.needs_input_grad[2]:
-            grad_bias = grad_output.sum(0)
-        
-        #print("Grad_input: ")
-        #print(grad_input)
-        #time.sleep(5)
-        
-        return grad_input, grad_weight, grad_bias
-
 
 # Fully connected neural network with one hidden layer
 class NeuralNet(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(NeuralNet, self).__init__()
         #self.enclave = LinearAlt()
-        self.fc1 = LinearAlt(input_size, hidden_size, bias = None) 
+        self.conv1 = ConvAlt(1, 32, 3, 1, bias = None)
+        self.conv2 = ConvAlt(32, 64, 3, 1, bias = None)
+        self.conv3 = ConvAlt(64, 128, 3, 1, bias = None)
+        self.fc1 = LinearAlt(128*28*28, hidden_size, bias = None) 
         # self.tanh = nn.Tanh()
-        self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
-        # self.tanh = nn.Tanh()
-        self.fc3 = LinearAlt(hidden_size, hidden_size, bias = None)
-        # self.tanh = nn.Tanh()
-        self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
+        # self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
+        # # self.tanh = nn.Tanh()
+        # self.fc3 = LinearAlt(hidden_size, hidden_size, bias = None)
+        # # self.tanh = nn.Tanh()
+        # self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
         # self.tanh = nn.Tanh()
         self.fc5 = LinearAlt(hidden_size, num_classes, bias = None)
         self.sm = nn.Softmax()
+
+        self.flat = nn.Flatten()
 
 
 
     def forward(self, x):
         
         #out = self.enclave(out)
-        out = self.fc1(x)
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.conv3(out)
+        out = self.flat(out)
+        out = self.fc1(out)
         # out = self.tanh(out)
         #For testing... will move later
-        #out = self.enclave(out, self.fc1.weight)
-        out = self.fc2(out)
-        # out = self.tanh(out)
-        out = self.fc3(out)
-        # out = self.tanh(out)
-        out = self.fc4(out)
+        # #out = self.enclave(out, self.fc1.weight)
+        # out = self.fc2(out)
+        # # out = self.tanh(out)
+        # out = self.fc3(out)
+        # # out = self.tanh(out)
+        # out = self.fc4(out)
         # out = self.tanh(out)
         out = self.fc5(out)
         out = self.sm(out)
@@ -200,7 +104,7 @@ total_step = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):  
         # Move tensors to the configured device
-        images = images.reshape(-1, 28*28).to(device)
+        images = images.reshape(-1, 28,28, 1).to(device)
         labels = labels.to(device)
         
         images += 1
@@ -215,9 +119,9 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
         
-        # if (i+1) % 100 == 0:
-        print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
-                .format(epoch+1, num_epochs, i+1, total_step, loss.item()))
+        if (i+1) % 100 == 0:
+            print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
+                    .format(epoch+1, num_epochs, i+1, total_step, loss.item()))
 
 # Test the model
 # In test phase, we don't need to compute gradients (for memory efficiency)
@@ -225,7 +129,7 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.reshape(-1, 28*28).to(device)
+        images = images.reshape(-1, 28,28, 1).to(device)
         labels = labels.to(device)
         outputs = model(images + 1)
         _, predicted = torch.max(outputs.data, 1)

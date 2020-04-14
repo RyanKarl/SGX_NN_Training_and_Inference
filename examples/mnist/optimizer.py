@@ -148,7 +148,7 @@ class SGD(Optimizer):
 def sec_update(data, d_p, lr):
     data.add_(-1, 1)
     # print(d_p)
-    f = d_p - 0
+    f = d_p - 1
     
 
     data.add_(-lr, f)
