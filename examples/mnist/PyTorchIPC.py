@@ -189,6 +189,7 @@ class ConvAlt(nn.Module):
     def forward(self, input):
         # See the autograd section for explanation of what happens here.
         patches = extract_image_patches(input.permute(0,3,1,2).contiguous(), self.kernel, self.stride)
+        # print(patches.size())
         return MyFunction2.apply(patches, self.weight, self.bias, self.spc)
 
 def extract_image_patches(x, kernel, stride=1, dilation=1):

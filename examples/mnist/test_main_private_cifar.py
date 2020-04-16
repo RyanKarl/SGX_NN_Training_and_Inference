@@ -19,19 +19,19 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters 
 input_size = 784
-hidden_size = 500
+hidden_size = 1024
 num_classes = 10
 num_epochs = 10
 batch_size = 128
 learning_rate = .1
 
 # MNIST dataset 
-train_dataset = torchvision.datasets.MNIST(root='../../data', 
+train_dataset = torchvision.datasets.CIFAR10(root='data', 
                                            train=True, 
                                            transform=transforms.ToTensor(),  
                                            download=True)
 
-test_dataset = torchvision.datasets.MNIST(root='../../data', 
+test_dataset = torchvision.datasets.CIFAR10(root='data', 
                                           train=False, 
                                           transform=transforms.ToTensor())
 
@@ -50,10 +50,16 @@ class NeuralNet(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(NeuralNet, self).__init__()
         #self.enclave = LinearAlt()
-        self.conv1 = ConvAlt(1, 32, 3, 1, bias = None)
-        self.conv2 = ConvAlt(32, 64, 3, 1, bias = None)
-        self.conv3 = ConvAlt(64, 128, 3, 1, bias = None)
-        self.fc1 = LinearAlt(128*28*28, hidden_size, bias = None) 
+        self.conv1 = ConvAlt(3, 128, 3, 1, bias = None)
+        self.conv2 = ConvAlt(128, 128, 3, 1, bias = None)
+        self.pool1 = nn.MaxPool2d(2)
+        self.conv3 = ConvAlt(64, 256, 3, 1, bias = None)
+        self.conv4 = ConvAlt(256, 256, 3, 1, bias = None)
+        self.pool2 = nn.MaxPool2d(2)
+        self.conv5 = ConvAlt(128, 512, 3, 1, bias = None)
+        self.conv6 = ConvAlt(512, 512, 3, 1, bias = None)
+        self.pool3 = nn.MaxPool2d(2)
+        self.fc1 = LinearAlt(512*8*8, hidden_size, bias = None) 
         # self.tanh = nn.Tanh()
         # self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
         # # self.tanh = nn.Tanh()
@@ -73,7 +79,13 @@ class NeuralNet(nn.Module):
         #out = self.enclave(out)
         out = self.conv1(x)
         out = self.conv2(out)
+        out = self.pool1(out)
         out = self.conv3(out)
+        out = self.conv4(out)
+        out = self.pool2(out)
+        out = self.conv5(out)
+        out = self.conv6(out)
+        out = self.pool3(out)
         out = self.flat(out)
         out = self.fc1(out)
         # out = self.tanh(out)
@@ -104,7 +116,7 @@ total_step = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):  
         # Move tensors to the configured device
-        images = images.reshape(-1, 28,28, 1).to(device)
+        images = images.reshape(-1, 32,32, 3).to(device)
         labels = labels.to(device)
         
         images += 1
@@ -129,7 +141,7 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.reshape(-1, 28,28, 1).to(device)
+        images = images.reshape(-1, 32,32, 3).to(device)
         labels = labels.to(device)
         outputs = model(images + 1)
         _, predicted = torch.max(outputs.data, 1)
