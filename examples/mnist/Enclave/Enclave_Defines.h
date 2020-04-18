@@ -21,5 +21,16 @@ typedef struct {
 	int width;
 } mat_dim_t;
 
+enum layer_t{FULLY_CONNECTED = 0, CONVOLUTIONAL = 1, POOLING = 2};
+
+#include <string>
+
+typedef struct {
+	int height;
+	int width;
+	std::string filename;
+	layer_t type;
+} layer_file_t;
+
 
 #endif

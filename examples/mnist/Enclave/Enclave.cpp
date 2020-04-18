@@ -9,6 +9,7 @@
 #include <math.h>
 
 #include "Enclave.h"
+#include "utilities.h"
 
 //0 is height, 1 is width
 int frievald(float * a, float * b, float * c, 
@@ -147,6 +148,220 @@ int verify_and_activate(float * data_in, int a_height, int a_width, int b_height
   
   free(enclave_data);
   enclave_data = NULL;
+  return 0;
+
+}
+
+/*
+Suggested format for network structure files:
+First line contains one positive integer stating the number of inputs, and two for the height and width of the input size, plus the input filename
+Lines after are in the format:
+height width filename type
+*/
+
+int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_layers,
+unsigned int & num_inputs, int & input_height, int & input_width, string & input_filename){
+  ifstream network_ifs(network_structure_fname);
+  layer_files.clear();
+  network_ifs >> num_inputs >> input_height >> input_width >> input_filename;
+  for(unsigned int i = 0; i < num_inputs; i++){
+    layer_file_t lft;
+    network_ifs >> lft.height >> lft.width >> lft.filename;
+    layer_files.push_back(lft);
+  }
+  ifs.close();
+  return layer_files.size() == num_inputs? 0 : 1;
+}
+
+#define MNIST_VALS 784
+
+//Assumes the existence of a large enough buffer
+int csv_getline(char * input_csv_name, float * vals, 
+  unsigned char * label, unsigned int num_vals){
+
+  static std::ifstream ifs(input_csv_name);
+
+  ifs >> *label;
+
+  //*vals = (unsigned char *) malloc(num_vals*sizeof(unsigned char));
+  for(unsigned int i = 0; i < num_vals; i++){
+    ifs >> (vals)[i];
+  }
+  return 0;
+}
+
+//Assume all buffers are allocated
+//Read in NORMALIZED values
+int csv_getbatch(char * input_csv_name, float ** vals, unsigned int num_inputs, unsigned int num_vals, unsigned char * labels){
+  std::ifstream ifs(input_csv_name);
+  for(unsigned int i = 0; i < num_inputs; i++){
+    ifs >> labels[i];
+    for(unsigned int j = 0; j < num_vals; j++){
+      ifs >> vals[i][j];
+      vals[i][j] /= (float)(1 << CHAR_BIT);
+    }
+  }
+  ifs.close();
+  return 0;
+}
+
+int mask(float * input, float * masks, unsigned int input_size){
+  for(unsigned int i = 0; i < input_size; i++){
+    input[i] += masks[i];
+  }
+  return 0;
+}
+
+//Assumes a buffer is allocated
+//This function should be an OCALL
+int read_weight_file(char * filename, int num_elements, float * buf){
+  if(!num_elements){
+    return 1;
+  }
+  FILE * f = fopen(filename, "rb");
+  if(!f){
+    return 1;
+  }
+  long len;
+  long bytes_read = fread(buf, sizeof(float), num_elements, f);
+  if(bytes_read*sizeof(float) != num_elements){
+    return 1;
+  }
+  if(fclose(f)){
+    return 1;
+  }
+  return 0;
+}
+
+//Assumes a buffer is allocated
+int read_all_weights(std::string * filenames, int num_layers, int * elts_per_layer, float ** bufs){
+  for(int i = 0; i < num_layers; i++){
+    bufs[i] = (float *) malloc(elts_per_layer[i]*sizeof(float));
+    //Should check return val
+    read_weight_file(filenames[i].c_str(), elts_per_layer[i], bufs[i]);
+  }
+  return 0;
+}
+
+//For inputs: read in entire batches to enclave memory from ordinary file through OCALLs, and free() data when done.
+
+static FILE * instream;
+static FILE * outstream;
+
+int init_streams(char * inpipe_fname, char * outpipe_fname){
+
+  int input_pipe = 0;
+  if(inpipe_fname){
+    input_pipe = open(inpipe_fname, O_RDONLY);
+  } 
+  if(input_pipe == -1){
+    fprintf(stderr, "ERROR: could not open input pipe %s\n", inpipe_fname);
+    return 1;
+  }
+  int output_pipe = 0;
+  if(outpipe_fname){
+    output_pipe = open(outpipe_fname, O_WRONLY);
+  }  
+  if(output_pipe == -1){
+    fprintf(stderr, "ERROR: could not open output pipe %s\n", outpipe_fname);
+    return 1;
+  }
+
+  if(!inpipe_fname){
+    instream = stdin;
+  }
+  else{
+    instream = fdopen(input_pipe, "r");
+  }
+  if(!outpipe_fname){
+    outstream = stdout;
+  }
+  else{
+    outstream = fdopen(output_pipe, "w");
+  }
+
+  return 0;
+
+}
+
+
+
+
+//Requires a buffer to be allocated
+int read_stream(void * buf, size_t total_bytes){
+  fread((void *) buf, 1, total_bytes, instream);
+}
+
+
+
+int write_stream(void * buf, size_t total_bytes){
+  fwrite((void *) buf, total_bytes, 1, outstream);
+  //Optional for performance
+  //fflush(oustream);
+}
+
+int close_streams(){
+  if(instream != stdin){
+    fclose(instream);
+    free(instream);
+    instream = NULL;
+  }
+  if(outstream != stdout){
+    fclose(outstream);
+    free(outstream);
+    outstream = NULL;
+  }
+  /*
+  if(use_std_io){
+    close(input_pipe);
+    close(output_pipe);
+  }
+  */
+  return 0;
+}
+
+//Need OCALLS for pipe I/O, setup, teardown
+int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname){
+
+  unsigned int num_layers;
+  vector<layer_file_t> layer_files;
+  unsigned int num_layers;
+  unsigned int num_inputs;
+  int input_height; 
+  int input_width;
+  string input_filename;
+
+  if(parse_structure(network_structure_fname, layer_files, num_layers,
+    num_inputs, input_height, input_width, input_filename)){
+    //Error!
+  }
+
+  unsigned int num_inputs;
+  
+  for(unsigned int input_idx = 0; input_idx < num_inputs; input_idx++){
+    //Read in input batch to an array
+
+    //Check that the array's size is equal to the expected height*width
+    for(unsigned int layer_idx = 0; layer_idx < num_layers; layer_idx++){
+      //Mask the current input
+
+      //Send it and a layer of weights to the GPU
+      //Send first dimensions, then data (twice)
+
+      //Get back a result C ?= A*B
+      //Read in dimensions, then data
+
+      //Validate C through Frievald's algorithm
+      //If it fails, send {-1, -1} back to the GPU and exit
+
+      //Unmask
+
+      //Activation function on the data
+
+    }
+    //Clean up current batch
+  }
+
   return 0;
 
 }

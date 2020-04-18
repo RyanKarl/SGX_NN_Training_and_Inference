@@ -96,7 +96,93 @@ class SPController:
       input_data = np.nditer(input_data, order='C')  
       
     return (header, input_data)  
+
+  @staticmethod validate_one_matrix(mat):
+    data_shape = im.shape
+    if len(data_shape) != MAT_DIM:
+      print("ERROR: matrix non 2-dimensional")
+      return None 
+    header = b''
+    for dim in data_shape:
+      header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER) 
+    packed_data = b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(mat, order='C')])
+    return (header, packed_data)
+
+
+  def read_matrix_from_enclave(self):
+    #Read response header
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
+      return None
+    if self.enclave_pipe_r.closed:
+      print("ERROR: input pipe closed")
+      return None 
+    header_resp = self.enclave_pipe_r.read(MAT_DIM*INT_BYTES)
+    if len(header_resp) != MAT_DIM*INT_BYTES:
+      print("ERROR: incorrect number of header bytes read in: " + str(len(header_resp)))
+      print("\t Header response was: " + str(header_resp))
+      return None
+
+    #Reads blocks of 4 bytes into ints
+    response_sizes = [int.from_bytes(header_resp[i:i+INT_BYTES], byteorder=BYTEORDER, signed=True) for i in [INT_BYTES*y for y in range(MAT_DIM)]]
+    #Equivalent to: response_sizes = [int.from_bytes(x, byteorder=BYTEORDER) for x in [header_resp[0:4], header_resp[4:8], header_resp[8:12]]]
+    if len(response_sizes) != MAT_DIM:
+      print("ERROR: shape incorrect")
+      return None
+    #If any dimension sizes are negative 1 this fails
+    if -1 in response_sizes:
+      #print("Frievald's Algorithm failed to verify!")
+      return np.asarray([]) #Return an empty list 
+        
+    num_floats = 1
+    for d in response_sizes:
+      num_floats *= d  
+    if self.enclave_pipe_r.closed:
+      print("ERROR: input pipe closed")
+      return None 
+      
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
+      return None  
+    enclave_response = self.enclave_pipe_r.read(num_floats*FLOAT_BYTES)
+    if len(enclave_response) != num_floats*FLOAT_BYTES:
+      print("ERROR: incorrect number of data bytes read in: " + str(len(enclave_response)))
+      return None
     
+    #Unpacks bytes into array of floats
+    float_resp = [struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)]
+    return float_resp
+  
+  def send_to_enclave(self, mult_result):  
+    output_data = SPController.validate_one_matrix(mult_result)
+    if output_data is None:
+      print("Bad input")
+      return None
+    #Write input header  
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
+      return None  
+    if self.gpu_pipe_w.closed:
+      print("ERROR: output pipe closed")
+      raise RuntimeError  
+    self.gpu_pipe_w.write(output_data[0])
+    self.gpu_pipe_w.flush()
+    
+    #Write input  
+    #Check to see if process is still ok
+    if self.proc.poll() is not None:
+      print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
+      return None  
+    if self.gpu_pipe_w.closed:
+      print("ERROR: output pipe closed")
+      raise RuntimeError    
+    self.gpu_pipe_w.write(output_data[1])
+    self.gpu_pipe_w.flush()  
+
+
   #input_data is list of 3 float ndarrays (2-D) by default
   def query_enclave(self, input_matrices, raw_bytes=False):
     packed_input = SPController.validate_and_pack(input_matrices, raw_bytes)
@@ -199,19 +285,20 @@ def main():
   c = a @ b
   arrs = [np.asarray(x) for x in [a, b, c]]
 
-  
+  num_tests = 4
+  if(len(sys.argv) >= 2+1):
+    num_tests = int(sys.argv[2])
   #Use this to generate output without actually running the subprocess
   if '-f' in sys.argv:
     parsed = SPController.validate_and_pack(arrs)
-    sys.stdout.buffer.write(parsed[0]+parsed[1])
+    for i in range(num_tests):
+      sys.stdout.buffer.write(parsed[0]+parsed[1])
     return
   
   #initializes SPController
   spc = SPController(debug=False)
   spc.start(verbose=0)
-  num_tests = 4
-  if(len(sys.argv) >= 2+1):
-    num_tests = int(sys.argv[2])
+  
   for i in range(num_tests):
     ret = spc.query_enclave(arrs)
     if ret is None:

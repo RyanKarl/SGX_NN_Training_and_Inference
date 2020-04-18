@@ -51,6 +51,8 @@ int activate(float * data_in, int a_height, int a_width, int b_height, int b_wid
 int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width,
  float * data_out, int out_height, int out_width);
 
+int enclave_main(int argc, char ** argv);
+
 #if defined(__cplusplus)
 }
 #endif
