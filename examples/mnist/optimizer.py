@@ -2,7 +2,15 @@ import torch
 from torch.optim.optimizer import Optimizer, required
 from torch.autograd import Variable
 
+class MyLoss(torch.nn.CrossEntropyLoss):
+    def __init__(self, weight=None, size_average=None, ignore_index=-100,
+                 reduce=None, reduction='mean'):
+        super(MyLoss, self).__init__(weight, size_average, reduce, reduction)
+        self.ignore_index = ignore_index
 
+    def forward(self, input, target):
+        loss = super().forward(input, target)
+        return loss
 
 class SGD(Optimizer):
     """Implements stochastic gradient descent (optionally with momentum).
@@ -125,6 +133,7 @@ class SGD(Optimizer):
                 # p.data += rand_mask
 
                 sec_update(p.data, d_p, group['lr'])
+                
 
                 #We pass p.data
                 #Here we page SGX with masked updated weights
@@ -138,8 +147,10 @@ class SGD(Optimizer):
 
 def sec_update(data, d_p, lr):
     data.add_(-1, 1)
+    # print(d_p)
     f = d_p - 1
+    
 
-    data.add_(lr, f)
+    data.add_(-lr, f)
     data.add_(1, 1)
 

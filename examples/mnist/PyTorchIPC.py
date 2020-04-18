@@ -1,33 +1,60 @@
 from torch.autograd import Function
 import torch.nn as nn
+import torch
 import numpy as np
 import torch
+import torch.nn.functional as F
 from SPController import SPController
 
 def SGXF(input, weight):
-    rand_mask = torch.ones(input.shape)
+    rand_mask = torch.ones(input.shape, device = "cuda:0")
+
+    weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
 
     a = input - rand_mask
-    b = weights - rand_mask
+    b = weight - weight_rand_mask
 
-    c = a @ b
+    c = a @ b.t()
+    # print(c)
 
-    return c + rand_mask
+    rand_mask = torch.ones(c.shape, device = "cuda:0")
+    out = torch.tanh(c) + rand_mask
+
+    return out
 
 
 def SGXB(grad_output, input, weight):
     
-    rand_mask = torch.ones(input.shape)
+    # print(grad_output.shape)
+    rand_mask = torch.ones(input.shape, device = "cuda:0")
+    weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
+    grad_rand_mask = torch.ones(grad_output.shape, device = "cuda:0")
 
     a = input - rand_mask
-    b = weight - rand_mask
-    c = grad_output - rand_mask
+    b = weight - weight_rand_mask
+    c = grad_output.clone() # - grad_rand_mask
+
+    # print(c.shape, a.shape)
+
+    c = c * (1-torch.tanh(a @ b.t())**2)
+    # a = 1-torch.tanh(a)**2
+    # print(c)
 
     d = c @ b
 
-    e = c.t().mm(a)
+    try:
+        e = c.t().mm(a)
+    except:
+        ax,bx,cx,dx = c.shape
+        ay,by,cy,dy = a.shape
+        e = c.view(ax*bx*cx, dx).t().mm(a.view(ay*by*cy,dy))
+    
+    # print(e)
 
-    return d, e
+    rand_mask = torch.ones(d.shape, device = "cuda:0")
+    weight_rand_mask = torch.ones(e.shape, device = "cuda:0")
+
+    return d, e + weight_rand_mask
 
 class MyFunction2(Function):
     # Note that both forward and backward are @staticmethods
@@ -59,7 +86,7 @@ class MyFunction2(Function):
         # masked_ouput = masked_input @ masked_weights
         # decrypted_output = maksed_output - random_matrix @ true_weights + (not so) extreme foiling
 
-        SGXF(input, weight)
+        output = SGXF(input, weight)
 
         #lalala sgx stuff
         # input = input.detach().numpy()
@@ -86,17 +113,18 @@ class MyFunction2(Function):
         input, weight, bias = ctx.saved_tensors
         grad_input = grad_weight = grad_bias = None
 
+        
+
 
 
         #rewrite all these functions to page to SGX and send back error with random noise
-        if ctx.needs_input_grad[0]:
-            grad_input = grad_output.mm(weight)
-        if ctx.needs_input_grad[1]:
-            grad_weight = grad_output.t().mm(input)
-        if bias is not None and ctx.needs_input_grad[2]:
-            grad_bias = grad_output.sum(0)
-
-        a,b = SGXB(grad_input, input, weight)
+        # if ctx.needs_input_grad[0]:
+        #     grad_input = grad_output.mm(weight)
+        # if ctx.needs_input_grad[1]:
+        #     grad_weight = grad_output.t().mm(input)
+        # if bias is not None and ctx.needs_input_grad[2]:
+        #     grad_bias = grad_output.sum(0)
+        a,b = SGXB(grad_output, input, weight)
         return a, b, grad_bias, None 
 
 
@@ -108,6 +136,7 @@ class LinearAlt(nn.Module):
 
         # self.spc = SPController()
         # self.spc.start(verbose=True)
+        self.spc = None
 
         self.input_features = input_features
         self.output_features = output_features
@@ -120,6 +149,7 @@ class LinearAlt(nn.Module):
             self.register_parameter('bias', None)
 
         self.weight.data.uniform_(-0.1, 0.1)
+        self.weight.data.add_(1, 1)
         if bias is not None:
             self.bias.data.uniform_(-0.1, 0.1)
 
@@ -127,3 +157,52 @@ class LinearAlt(nn.Module):
     def forward(self, input):
         # See the autograd section for explanation of what happens here.
         return MyFunction2.apply(input, self.weight, self.bias, self.spc)
+
+
+class ConvAlt(nn.Module):
+    def __init__(self, input_channels, output_channels, kernel, stride, bias=True):
+        super(ConvAlt, self).__init__()
+
+        # self.spc = SPController()
+        # self.spc.start(verbose=True)
+        self.spc = None
+
+        self.kernel = kernel
+        self.stride = stride
+
+        self.input_features = input_channels
+        self.output_features = output_channels
+
+        #technically masked weights
+        self.weight = nn.Parameter(torch.Tensor(output_channels, input_channels * (kernel ** 2)))
+        if bias:
+            self.bias = nn.Parameter(torch.Tensor(output_channels))
+        else:
+            self.register_parameter('bias', None)
+
+        self.weight.data.uniform_(-0.1, 0.1)
+        self.weight.data.add_(1, 1)
+        if bias is not None:
+            self.bias.data.uniform_(-0.1, 0.1)
+
+
+    def forward(self, input):
+        # See the autograd section for explanation of what happens here.
+        patches = extract_image_patches(input.permute(0,3,1,2).contiguous(), self.kernel, self.stride)
+        # print(patches.size())
+        return MyFunction2.apply(patches, self.weight, self.bias, self.spc)
+
+def extract_image_patches(x, kernel, stride=1, dilation=1):
+    # Do TF 'SAME' Padding
+    b,c,h,w = x.shape
+    h2 = np.ceil(h / stride).astype(int)
+    w2 = np.ceil(w / stride).astype(int)
+    pad_row = (h2 - 1) * stride + (kernel - 1) * dilation + 1 - h
+    pad_col = (w2 - 1) * stride + (kernel - 1) * dilation + 1 - w
+    x = F.pad(x, (pad_row//2, pad_row - pad_row//2, pad_col//2, pad_col - pad_col//2))
+    
+    # Extract patches
+    patches = x.unfold(2, kernel, stride).unfold(3, kernel, stride)
+    patches = patches.permute(0,4,5,1,2,3).contiguous()
+    
+    return patches.view(b,patches.shape[-2], patches.shape[-1], -1)
