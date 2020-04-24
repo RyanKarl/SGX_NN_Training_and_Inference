@@ -15,14 +15,52 @@ double update_weight(double w, double a, double d){
     return (w - a * d);
 }
 
+double feed_forward(NN_layer n1, NN_layer n2)i{
+    
+    double zh1 = w1 * x1 + w3 * x2 + w5 * x3 + b1;
+    
+    double zh2 = w2 * x1 + w4 * x2 + w6 * x3 + b2;
+}
+
+class NN_layer 
+{ 
+    public: 
+  
+        std::vector<double> nodes; 
+        std::vector<double> weights;
+        double bias;
+  
+}; 
+
 int main()
 {
     //Step 1
-    int x1 = 1, x2 = 4, x3 = 5;
-    double w1 = 0.1, w2 = 0.2, w3 = 0.3, w4 = 0.4, w5 = 0.5, w6 = 0.6, w7 = 0.7, w8 = 0.8, w9 = 0.9, w10 = 0.1;
-    double b1 = 0.5, b2 = 0.5;
+    std::vector<int> inputs (1, 4, 5);
+
     double t1 = 0.1, t2 = 0.05; 
     double alpha = 0.01;
+
+    NN_layer layer1
+        
+    for  (int i = 1; i <= 6; i++){
+        layer1.nodes.pushback(i/10)
+    }
+    
+    layer1.nodes.pushback(1,4,5)
+    layer1.bias = 0.5
+
+    NN_layer layer2 
+    for  (int i = 7; i <= 10; i++){
+        if (i != 10){
+            layer2.nodes.pushback(i/10)
+        }
+        else{
+            layer2.nodes.pushback(0.1)
+        }
+    }
+ 
+    layer2.bias = 0.5
+
 
     //for (int i = 0; i < 100000; i++){
         //Step 2
