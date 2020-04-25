@@ -5,8 +5,9 @@ import torchvision
 import torchvision.transforms as transforms
 import time
 import numpy as np
-from PyTorchIPC import LinearAlt, ConvAlt
+from PyTorchIPC import LinearAlt, ConvAlt, LinearAltLast
 from optimizer import SGD, MyLoss
+import sys
 
 #Force Determinism
 torch.manual_seed(0)
@@ -21,9 +22,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 1024
 num_classes = 10
-num_epochs = 10
+num_epochs = 1
 batch_size = 128
-learning_rate = .1
+learning_rate = [.1,.05,.01,.005,.001][int(sys.argv[1]) - 1]
 
 # MNIST dataset 
 train_dataset = torchvision.datasets.CIFAR10(root='data', 
@@ -53,13 +54,13 @@ class NeuralNet(nn.Module):
         self.conv1 = ConvAlt(3, 128, 3, 1, bias = None)
         self.conv2 = ConvAlt(128, 128, 3, 1, bias = None)
         self.pool1 = nn.MaxPool2d(2)
-        self.conv3 = ConvAlt(64, 256, 3, 1, bias = None)
+        self.conv3 = ConvAlt(128, 256, 3, 1, bias = None)
         self.conv4 = ConvAlt(256, 256, 3, 1, bias = None)
         self.pool2 = nn.MaxPool2d(2)
-        self.conv5 = ConvAlt(128, 512, 3, 1, bias = None)
+        self.conv5 = ConvAlt(256, 512, 3, 1, bias = None)
         self.conv6 = ConvAlt(512, 512, 3, 1, bias = None)
         self.pool3 = nn.MaxPool2d(2)
-        self.fc1 = LinearAlt(512*8*8, hidden_size, bias = None) 
+        self.fc1 = LinearAlt(512*4*4, hidden_size, bias = None) 
         # self.tanh = nn.Tanh()
         # self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
         # # self.tanh = nn.Tanh()
@@ -67,7 +68,7 @@ class NeuralNet(nn.Module):
         # # self.tanh = nn.Tanh()
         # self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
         # self.tanh = nn.Tanh()
-        self.fc5 = LinearAlt(hidden_size, num_classes, bias = None)
+        self.fc5 = LinearAltLast(hidden_size, num_classes, bias = None)
         self.sm = nn.Softmax()
 
         self.flat = nn.Flatten()
@@ -116,7 +117,7 @@ total_step = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):  
         # Move tensors to the configured device
-        images = images.reshape(-1, 32,32, 3).to(device)
+        images = images.reshape(-1, 3, 32,32).to(device)
         labels = labels.to(device)
         
         images += 1
@@ -141,7 +142,7 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.reshape(-1, 32,32, 3).to(device)
+        images = images.reshape(-1, 3, 32,32).to(device)
         labels = labels.to(device)
         outputs = model(images + 1)
         _, predicted = torch.max(outputs.data, 1)

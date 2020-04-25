@@ -5,7 +5,7 @@ import torchvision
 import torchvision.transforms as transforms
 import time
 import numpy as np
-from PyTorchIPC import LinearAlt, ConvAlt
+from PyTorchIPC import LinearAlt, ConvAlt, LinearAltLast, my_cross_entropy
 from optimizer import SGD, MyLoss
 
 #Force Determinism
@@ -21,7 +21,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 10
+num_epochs = 1
 batch_size = 128
 learning_rate = .1
 
@@ -61,8 +61,8 @@ class NeuralNet(nn.Module):
         # # self.tanh = nn.Tanh()
         # self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
         # self.tanh = nn.Tanh()
-        self.fc5 = LinearAlt(hidden_size, num_classes, bias = None)
-        self.sm = nn.Softmax()
+        self.fc5 = LinearAltLast(hidden_size, num_classes, bias = None)
+        # self.sm = nn.Softmax()
 
         self.flat = nn.Flatten()
 
@@ -80,13 +80,13 @@ class NeuralNet(nn.Module):
         #For testing... will move later
         # #out = self.enclave(out, self.fc1.weight)
         # out = self.fc2(out)
-        # # out = self.tanh(out)
+        # out = self.tanh(out)
         # out = self.fc3(out)
         # # out = self.tanh(out)
         # out = self.fc4(out)
         # out = self.tanh(out)
         out = self.fc5(out)
-        out = self.sm(out)
+        # out = self.sm(out)
         # print(out)
         # print(out)
 
@@ -96,7 +96,7 @@ model = NeuralNet(input_size, hidden_size, num_classes).to(device)
 
 
 # Loss and optimizer
-criterion = MyLoss()
+criterion = my_cross_entropy
 optimizer = SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
 
 # Train the model
@@ -104,7 +104,7 @@ total_step = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):  
         # Move tensors to the configured device
-        images = images.reshape(-1, 28,28, 1).to(device)
+        images = images.reshape(-1, 1, 28,28).to(device)
         labels = labels.to(device)
         
         images += 1
@@ -129,7 +129,7 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.reshape(-1, 28,28, 1).to(device)
+        images = images.reshape(-1, 1,28,28).to(device)
         labels = labels.to(device)
         outputs = model(images + 1)
         _, predicted = torch.max(outputs.data, 1)
