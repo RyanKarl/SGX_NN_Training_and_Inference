@@ -190,9 +190,7 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
   network_ifs >> num_inputs >> input_height >> input_width;
   for(unsigned int i = 0; i < num_inputs; i++){
     layer_file_t lft;
-    network_ifs >> lft.height >> lft.width >> lft.filename;
-    //TODO change for different networks
-    lft.type = FULLY_CONNECTED;
+    network_ifs >> lft.height >> lft.width >> lft.filename >> lft.type;
     layer_files.push_back(lft);
   }
   network_ifs.close();
@@ -261,12 +259,26 @@ int read_weight_file(const char * filename, int num_elements, float * buf){
   return 0;
 }
 
+int read_weight_file_plain(const char * filename, int num_elements, float * buf){
+  ifstream fs(filename);
+  int i;
+  for(i = 0; i < num_elements; i++){
+    fs >> buf[i];
+  }
+  return (i == num_elements-1)? 0 : 1;
+}
+
 //Assumes a buffer is allocated
 int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
   for(size_t i = 0; i < layers.size(); i++){
     bufs[i] = (float *) malloc(layers[i].height * layers[i].width * sizeof(float));
     //Should check return val
+#ifdef NENCLAVE
+    read_weight_file_plain(layers[i].filename.c_str(), layers[i].height * layers[i].width, bufs[i]);
+#else
     read_weight_file(layers[i].filename.c_str(), layers[i].height * layers[i].width, bufs[i]);
+#endif    
+    
   }
   return 0;
 }
@@ -382,7 +394,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename, char
     //Error
   }
   
-  
+  //TODO determine how to get num. layers from a place besides master arch. file
   for(unsigned int input_idx = 0; input_idx < num_inputs; input_idx++){
   
     float * input_data;
