@@ -7,9 +7,20 @@
 #include <assert.h>
 #include <unistd.h>
 #include <math.h>
+#include <fcntl.h>
+
+#include <vector>
+#include <string>
+#include <fstream>
+
 
 #include "Enclave.h"
 #include "utilities.h"
+
+using std::vector;
+using std::string;
+using std::ifstream;
+using std::ofstream;
 
 //0 is height, 1 is width
 int frievald(float * a, float * b, float * c, 
@@ -97,15 +108,11 @@ int verify_frievald(float * data, int a_height, int a_width, int b_height, int b
   return 0;
 }
 
+/*
 int activate(float * data_in, int in_height, int in_width, 
   float * data_out, int out_height, int out_width){
   //Use the below if things are done in-place
   //data_outshape must have DATA_DIMENSIONS elements
-  /*
-  for(unsigned int i = 0; i < MAT_DIM; i++){
-    matrix_n_out[i] = matrix_n[i];
-  }
-  */
 
   //Using tanh as the activation function
   assert(out_height == in_height && out_width == in_width);
@@ -114,6 +121,22 @@ int activate(float * data_in, int in_height, int in_width,
   }  
 
   return 0;
+}
+*/
+
+int activate(float * data, int height, int width){
+  if(height <= 0 || width <= 0){
+    return 1;
+  }
+  for(int i = 0; i < height * width; i++){
+    data[i] = tanh(data[i]);
+  }
+  return 0;
+}
+
+//TODO complete this
+void unmask(float * data, int width, int height, float * mask_data, float * input_layer){
+  return;
 }
 
 int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width,
@@ -140,7 +163,7 @@ int verify_and_activate(float * data_in, int a_height, int a_width, int b_height
   }
   
   float * activation_buffer_enclave = enclave_data + mult_ptr_offset;
-  if(activate(activation_buffer_enclave, c_height, c_width, data_out, out_height, out_width)){
+  if(activate(activation_buffer_enclave, c_height, c_width)){
     free(enclave_data);
     enclave_data = NULL;
     return 1;
@@ -158,26 +181,29 @@ First line contains one positive integer stating the number of inputs, and two f
 Lines after are in the format:
 height width filename type
 */
-
-int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_layers,
-unsigned int & num_inputs, int & input_height, int & input_width, string & input_filename){
+//TODO make this an OCALL
+int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, int & input_height, int & input_width){
+  
   ifstream network_ifs(network_structure_fname);
   layer_files.clear();
-  network_ifs >> num_inputs >> input_height >> input_width >> input_filename;
+  //num_inputs is batch size
+  network_ifs >> num_inputs >> input_height >> input_width;
   for(unsigned int i = 0; i < num_inputs; i++){
     layer_file_t lft;
     network_ifs >> lft.height >> lft.width >> lft.filename;
+    //TODO change for different networks
+    lft.type = FULLY_CONNECTED;
     layer_files.push_back(lft);
   }
-  ifs.close();
+  network_ifs.close();
   return layer_files.size() == num_inputs? 0 : 1;
 }
 
 #define MNIST_VALS 784
 
 //Assumes the existence of a large enough buffer
-int csv_getline(char * input_csv_name, float * vals, 
-  unsigned char * label, unsigned int num_vals){
+int csv_getline(const char * input_csv_name, float * vals, 
+  char * label, size_t num_vals){
 
   static std::ifstream ifs(input_csv_name);
 
@@ -186,19 +212,22 @@ int csv_getline(char * input_csv_name, float * vals,
   //*vals = (unsigned char *) malloc(num_vals*sizeof(unsigned char));
   for(unsigned int i = 0; i < num_vals; i++){
     ifs >> (vals)[i];
+    //Normalize float value
+    vals[i] /= (1 << CHAR_BIT);
   }
   return 0;
 }
 
 //Assume all buffers are allocated
 //Read in NORMALIZED values
-int csv_getbatch(char * input_csv_name, float ** vals, unsigned int num_inputs, unsigned int num_vals, unsigned char * labels){
+int csv_getbatch(char * input_csv_name, float ** vals, unsigned int num_inputs, unsigned int num_vals, char * labels){
   std::ifstream ifs(input_csv_name);
   for(unsigned int i = 0; i < num_inputs; i++){
     ifs >> labels[i];
     for(unsigned int j = 0; j < num_vals; j++){
       ifs >> vals[i][j];
-      vals[i][j] /= (float)(1 << CHAR_BIT);
+      //Normalize float value
+      vals[i][j] /= (1 << CHAR_BIT);
     }
   }
   ifs.close();
@@ -214,7 +243,7 @@ int mask(float * input, float * masks, unsigned int input_size){
 
 //Assumes a buffer is allocated
 //This function should be an OCALL
-int read_weight_file(char * filename, int num_elements, float * buf){
+int read_weight_file(const char * filename, int num_elements, float * buf){
   if(!num_elements){
     return 1;
   }
@@ -222,9 +251,8 @@ int read_weight_file(char * filename, int num_elements, float * buf){
   if(!f){
     return 1;
   }
-  long len;
   long bytes_read = fread(buf, sizeof(float), num_elements, f);
-  if(bytes_read*sizeof(float) != num_elements){
+  if(bytes_read*sizeof(float) != (unsigned long) num_elements){
     return 1;
   }
   if(fclose(f)){
@@ -234,11 +262,11 @@ int read_weight_file(char * filename, int num_elements, float * buf){
 }
 
 //Assumes a buffer is allocated
-int read_all_weights(std::string * filenames, int num_layers, int * elts_per_layer, float ** bufs){
-  for(int i = 0; i < num_layers; i++){
-    bufs[i] = (float *) malloc(elts_per_layer[i]*sizeof(float));
+int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
+  for(size_t i = 0; i < layers.size(); i++){
+    bufs[i] = (float *) malloc(layers[i].height * layers[i].width * sizeof(float));
     //Should check return val
-    read_weight_file(filenames[i].c_str(), elts_per_layer[i], bufs[i]);
+    read_weight_file(layers[i].filename.c_str(), layers[i].height * layers[i].width, bufs[i]);
   }
   return 0;
 }
@@ -284,20 +312,22 @@ int init_streams(char * inpipe_fname, char * outpipe_fname){
 
 }
 
-
-
-
 //Requires a buffer to be allocated
 int read_stream(void * buf, size_t total_bytes){
-  fread((void *) buf, 1, total_bytes, instream);
+  int res = fread((void *) buf, 1, total_bytes, instream);
+  return (res != 0);
 }
 
 
 
 int write_stream(void * buf, size_t total_bytes){
-  fwrite((void *) buf, total_bytes, 1, outstream);
+  if(buf == NULL){
+    return 1;
+  }
+  int res = fwrite((void *) buf, total_bytes, 1, outstream);
   //Optional for performance
   //fflush(oustream);
+  return (res != 0);
 }
 
 int close_streams(){
@@ -320,47 +350,149 @@ int close_streams(){
   return 0;
 }
 
+void mask(float * data, int len, float * mask_data){
+  for(int i = 0; i < len; i++){
+    data[i] += mask_data[i];
+  }
+  return;
+}
+
 //Need OCALLS for pipe I/O, setup, teardown
 int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname){
 
   unsigned int num_layers;
   vector<layer_file_t> layer_files;
-  unsigned int num_layers;
   unsigned int num_inputs;
   int input_height; 
   int input_width;
-  string input_filename;
+  
 
-  if(parse_structure(network_structure_fname, layer_files, num_layers,
-    num_inputs, input_height, input_width, input_filename)){
+  if(parse_structure(network_structure_fname, layer_files, 
+    num_inputs, input_height, input_width)){
     //Error!
   }
+  
+  num_layers = layer_files.size();
 
-  unsigned int num_inputs;
+
+  float ** layer_data;
+  layer_data = (float **) malloc(sizeof(float *) * num_layers);
+  //Read in all layer data
+  if(read_all_weights(layer_files, layer_data)){
+    //Error
+  }
+  
   
   for(unsigned int input_idx = 0; input_idx < num_inputs; input_idx++){
-    //Read in input batch to an array
-
+  
+    float * input_data;
+    
     //Check that the array's size is equal to the expected height*width
     for(unsigned int layer_idx = 0; layer_idx < num_layers; layer_idx++){
+    
+      int data_height, data_width;
+    
+      if(layer_idx == 0){
+        data_height = input_height;
+        data_width = input_width;
+        //Read in input to an array
+        //Allocate buffer
+        input_data = (float *) malloc(data_height*data_width*sizeof(float));
+        char data_label;
+        if(input_data == NULL){
+          //Error
+        }    
+        //Read to the buffer
+        if(csv_getline(input_csv_filename, input_data, &data_label, data_height*data_width)){
+          //Error
+        }
+      }
+      else{
+        data_height = layer_files[layer_idx].height;
+        data_width = layer_files[layer_idx].width;
+      }
+      //If not first layer (i.e. raw input), then the input data is already initialized
+      
       //Mask the current input
+      //First, get the random mask
+      float * mask_data = (float *) malloc(sizeof(float) * data_height*data_width);
+      //Cast should be explicit, for the non-SGX version
+      rand_bytes((unsigned char *) mask_data, sizeof(float) * data_height*data_width);
+      //Next, mask the data
+      mask(input_data, data_height*data_width, mask_data);
 
+      
       //Send it and a layer of weights to the GPU
       //Send first dimensions, then data (twice)
-
+      int out_dims[2] = {data_height, data_width};
+      if(write_stream((void *) out_dims, sizeof(out_dims))){
+        //Error
+      }
+      if(write_stream((void *) input_data, sizeof(float)*data_height*data_width)){
+        //Error
+      }
+      if(write_stream((void *) out_dims, sizeof(out_dims))){
+        //Error
+      }
+      if(write_stream((void *) layer_data[layer_idx], sizeof(float)*data_height*data_width)){
+        //Error
+      }
+      
       //Get back a result C ?= A*B
       //Read in dimensions, then data
+      int in_dims[2] = {-1, -1};
+      int next_height, next_width;
+      if(read_stream((void *) in_dims, sizeof(in_dims))){
+        //Error
+      }
+      next_height = in_dims[0];
+      next_width = in_dims[1];
+      float * gpu_result = (float *) malloc(sizeof(float)*next_height*next_width);
+      if(read_stream((void *) gpu_result, sizeof(float)*next_height*next_width)){
+        //Error
+      }
 
       //Validate C through Frievald's algorithm
       //If it fails, send {-1, -1} back to the GPU and exit
+      if(frievald(input_data, layer_data[layer_idx], gpu_result, 
+  data_height, data_width, data_height, data_width, next_height, next_width)){
+        //Verification failed!
+        int failed_resp[2] = {-1, -1};
+        if(write_stream((void *) failed_resp, sizeof(failed_resp))){
+          //Error
+        }
+        return 1;
+      }
 
       //Unmask
-
+      unmask(gpu_result, next_height, next_width, mask_data, layer_data[layer_idx]);
+      
+      //Cleanup random mask
+      free(mask_data);
+      mask_data = NULL;
+      //Cleanup original input
+      free(input_data);
+      input_data = NULL;
       //Activation function on the data
-
+      if(activate(gpu_result, next_height, next_width)){
+        //Error
+      }
+      
+      //TODO backpropagation
+      
+      //Setup things for the next iteration
+      if(layer_idx){
+        input_data = gpu_result;
+      }
     }
-    //Clean up current batch
   }
+  
+  //Cleanup layers
+  for(size_t i = 0; i < layer_files.size(); i++){
+    free(layer_data[i]);
+  }
+  free(layer_data);
+  
 
   return 0;
 

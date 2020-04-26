@@ -40,7 +40,7 @@ enclave {
      */
     
     trusted {
-        public int verify_and_activate([user_check] float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width, [user_check] float * data_out, int out_height, int out_width);
+        public int enclave_main([in, string] char * network_structure_fname, [in, string] char * input_csv_filename, [in, string] char * inpipe_fname, [in, string] char * outpipe_fname);
     };
 
     /* 
@@ -48,10 +48,14 @@ enclave {
      *  [in]: copy the string buffer to App outside.
      *  [string]: specifies 'str' is a NULL terminated buffer.
      */
-    /* 
+    
     untrusted {
-        void ocall_print_string([in, string] const char *str);
+        int init_streams([out, string] char * inpipe_fname, [in, string] char * outpipe_fname);
+        int read_stream([in, size=total_bytes] void * buf, size_t total_bytes);
+        int write_stream([out, size=total_bytes] void * buf, size_t total_bytes);
+        int close_streams();
+        int csv_getline([out, string] char * input_csv_name, [in, out, size=num_vals] float * vals, [in, out] unsigned char * label, size_t num_vals);
     };
-    */
+    
 
 };

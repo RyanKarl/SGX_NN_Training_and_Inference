@@ -234,26 +234,21 @@ int main(int argc, char ** argv){
 
 
   //i and o are filenames of named pipe
-  //sleepy not implemented
-  int sleepy = 0;
-  int use_std_io = 0;
   char * input_pipe_path = NULL;
   char * output_pipe_path = NULL;
+  char * network_structure_fname = NULL;
+  char * input_csv_filename = NULL;
   int verbose = 0;
 
   char c;
-  while((c = getopt(argc, argv, "sfi:o:vd")) != -1){
+  while((c = getopt(argc, argv, "s:c:i:o:v")) != -1){
     switch(c){
       case 'v':{
         verbose += 1;
         break;
       }
       case 's':{
-        sleepy = 1;
-        break;
-      }
-      case 'f':{
-        use_std_io = 1;
+        network_structure_fname = optarg;
         break;
       }
       case 'i':{
@@ -264,257 +259,29 @@ int main(int argc, char ** argv){
         output_pipe_path = optarg;
         break;  
       }
+      case 'c':{
+        input_csv_filename = optarg;
+      }
       default:{
         fprintf(stderr, "ERROR: unrecognized argument %c\n", c);
         return 0;
       }
     }
   }
-
-  
-  int input_pipe = 0;
-  if(!use_std_io){
-    input_pipe = open(input_pipe_path, O_RDONLY);
-  } 
-  if(input_pipe == -1){
-    fprintf(stderr, "ERROR: could not open input pipe %s\n", input_pipe_path);
-    return 1;
-  }
-  int output_pipe = 0;
-  if(!use_std_io){
-    output_pipe = open(output_pipe_path, O_WRONLY);
-  }  
-  if(output_pipe == -1){
-    fprintf(stderr, "ERROR: could not open output pipe %s\n", output_pipe_path);
-    return 1;
-  }
-
-  //c file object which is wrapper for file descriptor
-  FILE * instream;
-  FILE * outstream;
-  if(use_std_io){
-    if(verbose >= 2){
-      fprintf(stdout, "Assigning I/O to std\n");
-      fflush(stdout);
-    }
-    instream = stdin;
-    outstream = stdout;
-  }
-  else{
-    if(verbose >= 2){
-      fprintf(stdout, "Assigning I/O to file descriptors\n");
-      fflush(stdout);
-    }
-    instream = fdopen(input_pipe, "r");
-    outstream = fdopen(output_pipe, "w");
-  }
-   
-  if(instream == NULL){
-    fprintf(stderr, "ERROR: unable to open input pipe as file stream\n");
-    fflush(stderr);
-    return 1;
-  }
-  if(outstream == NULL){
-    fprintf(stderr, "ERROR: unable to open output pipe as file stream\n");
-    fflush(stderr);
-    return 1;
-  }
-
-
-  if(sleepy){
-    fprintf(stderr, "WARNING: Sleeping not yet implemented!\n");
-    fflush(stderr);
-  }
   
 #ifndef NENCLAVE  
   
   /* Initialize the enclave */
   if(initialize_enclave() < 0){
-      printf("Enter a character before exit ...\n");
-      getchar();
+      fprintf(stderr, "Enclave initialization FAILED, exiting\n");
       return -1; 
   }
   
 #endif  
-    
 
-  //Track how many rounds we go through
-  unsigned int round = 0;
-  while(1){
-    //Shape of input data
-    //Assumes a linear buffer
-    mat_dim_t matrix_n[NUM_MATRICES];
-    //Get number of bytes from pipe
-    if(verbose){
-      fprintf(stdout, "About to get header (%li bytes)\n", sizeof(matrix_n));
-      fflush(stdout);
-    }
-    
-    //Dangerous cast - works because array is entirely contiguous
-    if(!fread((void *) matrix_n, sizeof(mat_dim_t), NUM_MATRICES, instream)){
-      fprintf(stderr, "ERROR: could not read header\n");
-      fflush(stderr);
-      return 1;
-    }
-
-    if(verbose >= 2){
-      fprintf(stdout, "Matrix dimensions received: ");
-      for(unsigned int i = 0; i < NUM_MATRICES; i++){
-        fprintf(stdout, "%d %d ", matrix_n[i].height, matrix_n[i].width);
-      }
-      fprintf(stdout, "\n");
-    }
-    
-    //Now we know how many bytes to receive
-    //Read in data
-    int num_in = 0;
-    for(unsigned int i = 0; i < NUM_MATRICES; i++){
-      num_in += matrix_n[i].height * matrix_n[i].width;
-    }
-    
-    //num_bytes_in should be product of matrix dimensions i.e. 3*4*5 = 60 times sizeof(float)
-    if(verbose){
-      fprintf(stdout, "Total matrix elements to receive: %d \n", num_in);
-      fflush(stdout);
-    }
-
-    //Allocate array of floats for data
-    float * input = (float *) malloc((unsigned int) num_in * sizeof(float));
-    if(!input){
-      fprintf(stderr, "ERROR: malloc failed\n");
-      return -1;
-    }
-    
-    //Read in data from array to dynamic memory (note num_in is finite number of dimensions)
-    if(!fread(input, sizeof(float), num_in, instream)){
-      fprintf(stderr, "ERROR: could not read bytes\n");
-      return 1;
-    }
-
-    if(verbose >= 2){
-      fprintf(stdout, "Finished reading input from pipe: ");
-      if(verbose >= 3){
-        for(int i = 0; i < num_in; i++){
-          fprintf(stdout, "%f ", input[i]);
-        }
-      }
-      fprintf(stdout, "\n");
-      fflush(stdout);
-    }
-    
-    float * activation_data = NULL;
-    mat_dim_t activation_n = matrix_n[2]; //Assign output to be the same size as input - this is untrusted's responsibility!
-    activation_data = (float *) malloc(sizeof(float)*activation_n.width*activation_n.height);
-    if(!activation_data){
-      fprintf(stderr, "ERROR: malloc failed");
-      return 1;
-    }
-#ifndef NENCLAVE    
-    int enclave_retcode;
-    sgx_status_t sgx_status = verify_and_activate(global_eid, &enclave_retcode, input, matrix_n[0].height, matrix_n[0].width, matrix_n[1].height, matrix_n[1].width,
-     matrix_n[2].height, matrix_n[2].width, activation_data, activation_n.height, activation_n.width);
-    //Should probably check SGX status...
-#else
-    int enclave_retcode = verify_and_activate(input, matrix_n[0].height, matrix_n[0].width, matrix_n[1].height, matrix_n[1].width,
-     matrix_n[2].height, matrix_n[2].width, activation_data, activation_n.height, activation_n.width);
-#endif    
-    
-    
-    if(enclave_retcode){
-    
-      int frievald_result[MAT_DIM];
-      frievald_result[0] = frievald_result[1] = -1;
-      
-      if(verbose){
-        fprintf(stdout, "Frievald's algorithm and activation failed on round %d\n", round);
-        fprintf(stdout, "Sending response: %d %d\n", frievald_result[0], frievald_result[1]);
-        fflush(stdout);
-      }
-
-      if((!fwrite((int *) frievald_result, sizeof(frievald_result[0]), MAT_DIM, outstream)) || fflush(outstream)){
-        fprintf(stderr, "ERROR: could not write failed verification\n");
-        return 1;
-      }
-    }      
-      
-    //Send header with length
-    //Another dangerous cast
-    if((!fwrite((void *) &activation_n, sizeof(activation_n), 1, outstream)) || fflush(outstream)){
-      fprintf(stderr, "ERROR: could not write header\n");
-      fflush(stderr);
-      return 1;
-    }
-    else{
-      if(verbose >=2){
-        fprintf(stdout, "Sent header!\n");
-        fflush(stdout);
-      }
-    }
-    
-    int activated_size = activation_n.width*activation_n.height;
-    
-    if(verbose >= 2){
-      fprintf(stdout, "Sent output header: %ld bytes\n", sizeof(activation_n));
-      if(verbose >= 3){
-        fprintf(stdout, "Sending %d float outputs: ", activated_size);
-        for(int i = 0; i < activated_size; i++){
-          fprintf(stdout, "%f ", activation_data[i]);
-        }
-      }
-      fprintf(stdout, "\n");
-      fflush(stdout);
-    }
-    
-    //Now send actual data
-    if((!fwrite((float *) activation_data, sizeof(float), activated_size, outstream)) || fflush(outstream)){
-      fprintf(stderr, "ERROR: could not write out\n");
-      fflush(stderr);
-      return 1;
-    }
-    //Clean up memory (this is the data i.e. activation data)
-    
-    //Check that the activated data is a valid pointer, and not in range of input (i.e. fresh)
-    if((activation_data != NULL) 
-    && (activation_data < input) 
-    && (activation_data >= input+num_in)){
-      if(verbose >= 2){
-        fprintf(stdout, "Freeing activated data\n");
-        fflush(stdout);
-      }
-      free(activation_data);
-      activation_data = NULL;
-    }
-    
-
-    if(verbose){
-      fprintf(stdout, "Finished writing\n\n");
-      fflush(stdout);
-    }
-          
-    if(verbose >= 2){
-      fprintf(stdout, "Freeing input data\n");
-      fflush(stdout);
-    }
-    free(input);
-    input = NULL;
-
-    round++;
-  }
-
-  //Close the given pipes, clean up memory
-  //This code will rarely be called, as the program will be killed by the Python driver
+  int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path);
   
-  fclose(instream);
-  fclose(outstream);
-  free(instream);
-  instream = NULL;
-  free(outstream);
-  outstream = NULL;
-
-  if(use_std_io){
-    close(input_pipe);
-    close(output_pipe);
-  }
+    
   
   /* Destroy the enclave */
 #ifndef NENCLAVE  
@@ -523,6 +290,6 @@ int main(int argc, char ** argv){
   
   
   
-  return 0;
+  return enclave_result;
 
 }
