@@ -23,6 +23,11 @@ malloc_consolidate();\
 #include <getopt.h>
 #include <malloc.h>
 
+#include <iostream>
+
+using std::cout;
+using std::endl;
+
 #include "../Enclave/Enclave_Defines.h"
 
 #ifndef NENCLAVE
@@ -261,12 +266,17 @@ int main(int argc, char ** argv){
       }
       case 'c':{
         input_csv_filename = optarg;
+        break;
       }
       default:{
         fprintf(stderr, "ERROR: unrecognized argument %c\n", c);
         return 0;
       }
     }
+  }
+  
+  if(verbose){
+    cout << "Args parsed" << endl;
   }
   
 #ifndef NENCLAVE  
@@ -276,10 +286,17 @@ int main(int argc, char ** argv){
       fprintf(stderr, "Enclave initialization FAILED, exiting\n");
       return -1; 
   }
+  else if (verbose){
+    cout << "Successfully initialized enclave" << endl;
+  }
   
 #endif  
 
-  int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path);
+  int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, verbose);
+  
+  if(verbose){
+    cout << "Enclave returned " << enclave_result << endl;
+  }
   
     
   

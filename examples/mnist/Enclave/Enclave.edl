@@ -40,7 +40,7 @@ enclave {
      */
     
     trusted {
-        public int enclave_main([in, string] char * network_structure_fname, [in, string] char * input_csv_filename, [in, string] char * inpipe_fname, [in, string] char * outpipe_fname);
+        public int enclave_main([in, string] char * network_structure_fname, [in, string] char * input_csv_filename, [in, string] char * inpipe_fname, [in, string] char * outpipe_fname, int verbose);
     };
 
     /* 
@@ -55,6 +55,7 @@ enclave {
         int write_stream([out, size=total_bytes] void * buf, size_t total_bytes);
         int close_streams();
         int csv_getline([out, string] char * input_csv_name, [in, out, size=num_vals] float * vals, [in, out] unsigned char * label, size_t num_vals);
+        void print_out([out, string] const char * msg, bool error);
     };
     
 

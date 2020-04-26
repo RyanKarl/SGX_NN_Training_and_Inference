@@ -49,11 +49,13 @@ int activate(float * data, int height, int width); //Reference or value?
 int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width,
  float * data_out, int out_height, int out_width);
 
-int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname);
+int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
 
 void mask(float * data, int len, float * mask_data);
 
 void unmask(float * data, int width, int height, float * mask_data, float * input_layer);
+
+void print_out(const char * msg, bool error);
 
 #if defined(__cplusplus)
 }
