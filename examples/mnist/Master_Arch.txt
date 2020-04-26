@@ -1,1 +1,1 @@
-4 4 fc1.txt FULLY_CONNECTED
+4 4 fc1.txt 0
