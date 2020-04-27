@@ -21,9 +21,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 1
+num_epochs = 10
 batch_size = 128
-learning_rate = .1
+learning_rate = .01
 
 # MNIST dataset 
 train_dataset = torchvision.datasets.MNIST(root='../../data', 
@@ -53,13 +53,13 @@ class NeuralNet(nn.Module):
         self.conv1 = ConvAlt(1, 32, 3, 1, bias = None)
         self.conv2 = ConvAlt(32, 64, 3, 1, bias = None)
         self.conv3 = ConvAlt(64, 128, 3, 1, bias = None)
-        self.fc1 = LinearAlt(128*28*28, hidden_size, bias = None) 
+        self.fc1 = LinearAlt(61952, hidden_size, bias = None) 
         # self.tanh = nn.Tanh()
-        # self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
+        self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
         # # self.tanh = nn.Tanh()
-        # self.fc3 = LinearAlt(hidden_size, hidden_size, bias = None)
+        self.fc3 = LinearAlt(hidden_size, hidden_size, bias = None)
         # # self.tanh = nn.Tanh()
-        # self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
+        self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
         # self.tanh = nn.Tanh()
         self.fc5 = LinearAltLast(hidden_size, num_classes, bias = None)
         # self.sm = nn.Softmax()
@@ -104,7 +104,7 @@ total_step = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):  
         # Move tensors to the configured device
-        images = images.reshape(-1, 1, 28,28).to(device)
+        images = images.reshape(-1, 28,28, 1).to(device)
         labels = labels.to(device)
         
         images += 1
@@ -129,7 +129,7 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.reshape(-1, 1,28,28).to(device)
+        images = images.reshape(-1, 28,28, 1).to(device)
         labels = labels.to(device)
         outputs = model(images + 1)
         _, predicted = torch.max(outputs.data, 1)
