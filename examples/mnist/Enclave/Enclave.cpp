@@ -239,12 +239,9 @@ int csv_getline(std::istream & ifs, float * vals,
 int csv_getline(const char * csv_filename, float * vals, 
   char * label, size_t num_vals){
   static std::ifstream ifs(csv_filename);
-  //DEBUG
-  print_out("Initialized stream", true);
   if(!ifs.good()){
     return 1;
   }
-  //print_out("Stream is OK", false);
   
   char comma_holder;
   for(unsigned int i = 0; i < num_vals; i++){
@@ -307,15 +304,8 @@ int read_weight_file_plain(const char * filename, int num_elements, float * buf)
   ifstream fs(filename);
   int i;
   char comma_holder;
-#ifdef NENCLAVE
-  cout << "Reading " << num_elements << " floats from weight file " << filename << ": ";
-#endif  
   for(i = 0; i < num_elements; i++){
-    fs >> buf[i] >> comma_holder;
-#ifdef NENCLAVE
-    //DEBUG
-    cout << buf[i] << ' ';
-#endif    
+    fs >> buf[i] >> comma_holder;  
   }
   return (i == num_elements-1)? 0 : 1;
 }
@@ -367,7 +357,8 @@ int init_streams(char * inpipe_fname, char * outpipe_fname){
   
   int output_pipe = 0;
   if(outpipe_fname){
-    output_pipe = open(outpipe_fname, O_WRONLY);
+#define OUTFILE_PERMS 0644    
+    output_pipe = open(outpipe_fname, O_WRONLY | O_CREAT, OUTFILE_PERMS);
     if(output_pipe == -1){
       fprintf(stderr, "ERROR: could not open output pipe %s\n", outpipe_fname);
       return 1;
@@ -377,9 +368,7 @@ int init_streams(char * inpipe_fname, char * outpipe_fname){
   else{
     outstream = stdout;
   }
-
   return 0;
-
 }
 
 //Requires a buffer to be allocated
@@ -409,12 +398,6 @@ int close_streams(){
     free(outstream);
     outstream = NULL;
   }
-  /*
-  if(use_std_io){
-    close(input_pipe);
-    close(output_pipe);
-  }
-  */
   return 0;
 }
 
@@ -445,11 +428,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   vector<layer_file_t> layer_files;
   unsigned int num_inputs;
   int input_height; 
-  int input_width;
-
-#ifdef NENCLAVE
-  cout << "Verbosity: " << verbose << endl;
-#endif  
+  int input_width; 
   
   if(init_streams(inpipe_fname, outpipe_fname)){
     print_out("ERROR: could not initialize I/O streams", true);
@@ -472,10 +451,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   
   num_layers = layer_files.size();
 
-#ifdef NENCLAVE
-  //DEBUG
-  print_layer_info(layer_files);
-#endif
   float ** layer_data;
   layer_data = (float **) malloc(sizeof(float *) * num_layers);
   //Read in all layer data
@@ -486,12 +461,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   if(verbose){
     print_out("Read in weights", false);
   }
-  
-  //Setup input stream??
-  //auto instream = get_input_stream(input_csv_filename);
-  
-  
-  //TODO determine how to get num. layers from a place besides master arch. file
+
   for(unsigned int input_idx = 0; input_idx < num_inputs; input_idx++){
   
     float * input_data;
@@ -536,9 +506,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       
       //Mask the current input
       //First, get the random mask
-      float * mask_data = (float *) malloc(sizeof(float) * data_height*data_width);
+      float * mask_data = (float *) malloc(sizeof(float)*data_height*data_width);
       //Cast should be explicit, for the non-SGX version
-      rand_bytes((unsigned char *) mask_data, sizeof(float) * data_height*data_width);
+      rand_bytes((unsigned char *) mask_data, sizeof(float)*data_height*data_width);
       //Next, mask the data
       mask(input_data, data_height*data_width, mask_data, false);
       if(verbose){
@@ -549,29 +519,15 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Send it and a layer of weights to the GPU
       //Send first dimensions, then data (twice)
       int out_dims[2] = {data_height, data_width};
+     
 
-      //DEBUG - non-enclave only
-#ifdef NENCLAVE
-      if(verbose >= 2){
-        cout << "Output dimensions: " << data_height << ' ' << data_width << endl;
-      }
-#endif      
-
-      if(write_stream((void *) out_dims, 2*sizeof(out_dims[0]))){
+      if(write_stream((void *) out_dims, sizeof(out_dims))){
         print_out("Failed writing input dimensions", true);
         return 1;
       }
       if(verbose){
         print_out("Sent input dimensions", false);
-      }
-#ifdef NENCLAVE      
-      if(verbose >= 2){
-        for(unsigned int i = 0; i < 2; i++){
-          cout << out_dims[i] << ' ';
-        }
-        cout << endl;
-      }
-#endif      
+      }    
      
       if(write_stream((void *) input_data, sizeof(float)*data_height*data_width)){
         print_out("Failed writing input", true);
@@ -580,16 +536,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       if(verbose){
         print_out("Sent input", false);
       }
-/*      
-#ifdef NENCLAVE      
-      if(verbose >= 2){
-        for(int i = 0; i < data_height*data_width; i++){
-          cout << input_data[i] << ' ';
-        }
-        cout << endl;
-      }
-#endif   
-*/
       
       if(write_stream((void *) out_dims, sizeof(out_dims))){
         print_out("Failed writing weights dimensions", true);
@@ -606,16 +552,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       if(verbose){
         print_out("Sent weights", false);
       }
-/*      
-#ifdef NENCLAVE      
-      if(verbose >= 2){
-        for(int i = 0; i < data_height*data_width; i++){
-          cout << layer_data[layer_idx][i] << ' ';
-        }
-        cout << endl;
-      }
-#endif  
-*/
       
       //Get back a result C ?= A*B
       //Read in dimensions, then data

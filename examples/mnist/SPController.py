@@ -73,10 +73,11 @@ class SPController:
       self.gpu_pipe_w = self.proc.stdin
       self.enclave_pipe_r = self.proc.stdout
       
+  #Deprecated    
   @staticmethod  
-  def validate_and_pack(input_matrices, raw_bytes=False):
+  def validate_and_pack_matrices(input_matrices, raw_bytes=False):
     if len(input_matrices) != NUM_MATRICES:
-      print("ERROR: Matrix list incorrect: " + str(data_shape))
+      print("ERROR: Matrix list incorrect: " + len(input_matrices))
       return None
       
     matrix_dims = list()
@@ -136,9 +137,6 @@ class SPController:
       print("ERROR: incorrect number of header bytes read in: " + str(len(header_resp)))
       print("\t Header response was: " + str(header_resp))
       return None
-
-    #DEBUG
-    print(header_resp)
 
     #Reads blocks of 4 bytes into ints
     response_sizes = [int.from_bytes(header_resp[i:i+INT_BYTES], byteorder=BYTEORDER, signed=True) for i in [INT_BYTES*y for y in range(MAT_DIM)]]
@@ -204,7 +202,7 @@ class SPController:
 
   #input_data is list of 3 float ndarrays (2-D) by default
   def query_enclave(self, input_matrices, raw_bytes=False):
-    packed_input = SPController.validate_and_pack(input_matrices, raw_bytes)
+    packed_input = SPController.validate_and_pack_matrices(input_matrices, raw_bytes)
     if packed_input is None:
       print("Bad input")
       return None
@@ -299,13 +297,24 @@ class SPController:
 #An example of how to use the SubProcess Controller
 #TODO strip out using std. IO
 def main():
+
+
+  #Create standalone file for input
+  if len(sys.argv) >= 2:
+    outfile_name = sys.argv[1]
+    dims = [4, 4]
+    output = np.zeros(dims)
+    packed_output = SPController.validate_one_matrix(output)
+    fout = open(outfile_name, 'wb', buffering=BUFFERING)
+    fout.write(packed_output[0])
+    fout.write(packed_output[1])
+    fout.close()
+    return
   
   #initializes SPController
   spc = SPController(debug=False)
 
-  print(spc.args)
-
-  spc.start(verbose=2)
+  spc.start(verbose=0)
   
   a = spc.read_matrix_from_enclave()
   if a is None:
