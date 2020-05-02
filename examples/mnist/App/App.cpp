@@ -28,8 +28,6 @@ malloc_consolidate();\
 using std::cout;
 using std::endl;
 
-#include "../Enclave/Enclave_Defines.h"
-
 #ifndef NENCLAVE
 
 # include "sgx_error.h"       /* sgx_status_t */
