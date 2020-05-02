@@ -7,6 +7,8 @@ import torch.nn.functional as F
 from SPController import SPController
 import time
 
+input_ = input
+
 def my_cross_entropy(x, y):
     #x = x - 1
     log_prob = -1.0 * F.log_softmax(x, 1)
@@ -27,7 +29,7 @@ def softmax(x):
 
 
 def softmax_der(s):
-    return torch.diag_embed(s) - (s[:,:,None] @ s[:,:,None].permute([0,2,1]))
+    return torch.diag_embed(s) - (s[:,:,None] @ s[:,:,None].permute([0,2,1]).contiguous())
 
 
 def SGXFL(input, weight):
@@ -48,7 +50,7 @@ def SGXFL(input, weight):
     out = softmax(c) #+ rand_mask
 
     try:
-        return out.permute(0,3,1,2)
+        return out
     except:
         return out
 
@@ -63,7 +65,7 @@ def SGXBL(grad_output, input, weight):
     a = input - rand_mask
     b = weight - weight_rand_mask
     try:
-        c = grad_output.clone().permute(0,2,3,1) # - grad_rand_mask
+        c = grad_output.clone() # - grad_rand_mask
     except:
         c = grad_output.clone()
 
@@ -203,14 +205,18 @@ def SGXF(input, weight):
     a = input - rand_mask
     b = weight - weight_rand_mask
 
+    # print(a.shape,b.shape)
     c = a @ b.t()
     # print(c)
 
     rand_mask = torch.ones(c.shape, device = "cuda:0")
-    out = torch.tanh(c) + rand_mask
+    try:
+        out = (torch.relu(c) + rand_mask)
+    except:
+        out = (torch.relu(c) + rand_mask)
 
     try:
-        return out.permute(0,3,1,2)
+        return out
     except:
         return out
 
@@ -224,21 +230,34 @@ def SGXB(grad_output, input, weight):
 
     a = input - rand_mask
     b = weight - weight_rand_mask
+    
+    
     try:
-        c = grad_output.clone().permute(0,2,3,1) # - grad_rand_mask
+        c = grad_output.clone() # - grad_rand_mask
+        # input_()
     except:
         c = grad_output.clone()
 
+    
+
     # print(c.shape, a.shape, b.shape)
 
-    c = c * (1-torch.tanh(a @ b.t())**2)
+    # c = c * (1-torch.tanh(a @ b.t())**2)
     # c = c * (torch.sigmoid(a @ b.t()) * (1 - torch.sigmoid(a @ b.t())))
-    # c[(a @ b.t()) < 0] = 0
-    # print(c)
+
+    # ahh = (torch.relu(a @ b.t()) / (a @ b.t())) * 0
+
+    # ahh[torch.isnan(ahh)] = 0
+
+    # c *= ahh
+
+    c[(a @ b.t()) <= 0] = 0
     # a = 1-torch.tanh(a)**2
-    # print(c)
 
     d = c @ b
+
+    # print(d)
+
 
     try:
         e = c.t().mm(a)
@@ -246,14 +265,16 @@ def SGXB(grad_output, input, weight):
         ax,bx,cx,dx = c.shape
         ay,by,cy,dy = a.shape
         # print(a.shape, c.shape)
-        e = c.reshape(dx, ax*bx*cx).mm(a.view(ay*by*cy,dy))
+        e = c.reshape(dx,ax*bx*cx).mm(a.reshape(ay*by*cy,dy))
+
+
     
     # print(e)
 
     rand_mask = torch.ones(d.shape, device = "cuda:0")
     weight_rand_mask = torch.ones(e.shape, device = "cuda:0")
 
-    return d, e + weight_rand_mask
+    return d, e + weight_rand_mask 
 
 class MyFunction2(Function):
     # Note that both forward and backward are @staticmethods
@@ -395,15 +416,16 @@ class ConvAlt(nn.Module):
 
 def extract_image_patches(x, kernel, stride=1, dilation=1):
     # Do TF 'SAME' Padding
-    b,c,h,w = x.shape
+    b,h,w,c = x.shape
     h2 = np.ceil(h / stride).astype(int)
     w2 = np.ceil(w / stride).astype(int)
     pad_row = (h2 - 1) * stride + (kernel - 1) * dilation + 1 - h
     pad_col = (w2 - 1) * stride + (kernel - 1) * dilation + 1 - w
-    x = F.pad(x, (pad_row//2, pad_row - pad_row//2, pad_col//2, pad_col - pad_col//2))
+    # x = F.pad(x, (pad_row//2, pad_row - pad_row//2, pad_col//2, pad_col - pad_col//2))
     
     # Extract patches
-    patches = x.unfold(2, kernel, stride).unfold(3, kernel, stride)
-    patches = patches.permute(0,4,5,1,2,3).contiguous()
+    patches = x.unfold(1, kernel, stride).unfold(2, kernel, stride)
+    # print(patches.shape)
+    patches = patches.permute(0,3,4,5,1,2).contiguous()
     
     return patches.view(b,patches.shape[-2], patches.shape[-1], -1)
