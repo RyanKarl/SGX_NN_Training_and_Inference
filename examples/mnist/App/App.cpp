@@ -292,7 +292,7 @@ int main(int argc, char ** argv){
   
 #endif  
 
-#ifndef NENCLAVE
+#ifdef NENCLAVE
   int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, verbose);
   
 #else
