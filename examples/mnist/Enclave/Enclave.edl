@@ -56,7 +56,7 @@ enclave {
         int close_streams();
         int csv_getline([in, out, string] char * input_csv_name, [in,size=num_vals] float * vals, [in] unsigned char * label, size_t num_vals);
         void print_out([in, out, string] char * msg, bool error);
-        int file_to_string([in, out, string] char * fname, [in, out string] char * out);
+        int file_to_string([in, out, string] char * fname, [in, out, string] char * out);
     };
     
 
