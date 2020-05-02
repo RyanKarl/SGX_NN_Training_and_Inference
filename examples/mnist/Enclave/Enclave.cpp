@@ -436,7 +436,7 @@ void mask(float * data, int len, float * mask_data, bool do_mask=true){
   return;
 }
 
-void print_out(const char * msg, int error){
+void print_out(char * msg, int error){
   if(error){
     cerr << msg << endl;
   }
