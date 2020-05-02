@@ -261,7 +261,7 @@ int csv_getline(std::istream & ifs, float * vals,
 }
 */
 
-int csv_getline(const char * csv_filename, float * vals, 
+int csv_getline(char * csv_filename, float * vals, 
   char * label, size_t num_vals){
   static std::ifstream ifs(csv_filename);
   if(!ifs.good()){
@@ -436,7 +436,7 @@ void mask(float * data, int len, float * mask_data, bool do_mask=true){
   return;
 }
 
-void print_out(const char * msg, bool error){
+void print_out(char * msg, bool error){
   if(error){
     cerr << msg << endl;
   }
