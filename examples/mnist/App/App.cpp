@@ -29,6 +29,7 @@ using std::cout;
 using std::endl;
 
 #include "../Enclave/Enclave_Defines.h"
+#include "../Enclave/Enclave.h"
 
 #ifndef NENCLAVE
 
