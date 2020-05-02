@@ -50,13 +50,13 @@ enclave {
      */
     
     untrusted {
-        int init_streams([out, string] char * inpipe_fname, [out, string] char * outpipe_fname);
+        int init_streams([in, out, string] char * inpipe_fname, [out, string] char * outpipe_fname);
         int read_stream([in, size=total_bytes] void * buf, size_t total_bytes);
         int write_stream([out, size=total_bytes] void * buf, size_t total_bytes);
         int close_streams();
-        int csv_getline([out, string] char * input_csv_name, [in,size=num_vals] float * vals, [in] unsigned char * label, size_t num_vals);
-        void print_out([string] const char * msg, bool error);
-        int file_to_string([string] const char * fname, [in, string] char * out);
+        int csv_getline([in, out, string] char * input_csv_name, [in,size=num_vals] float * vals, [in] unsigned char * label, size_t num_vals);
+        void print_out([in, out, string] const char * msg, bool error);
+        int file_to_string([in, out, string] const char * fname, [in, string] char * out);
     };
     
 
