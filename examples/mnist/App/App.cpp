@@ -1,6 +1,6 @@
 //App.cpp
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
-//g++ App/App.cpp Enclave/Enclave.cpp -pedantic -Wall -Werror -O3 -o ./app -lm -DNENCLAVE
+//g++ App/App.cpp Enclave/Enclave.cpp -pedantic -Wall  -O3 -o ./app -lm -DNENCLAVE
 
 //Defined first to go before other standard libs
 /*
@@ -292,8 +292,15 @@ int main(int argc, char ** argv){
   
 #endif  
 
+#ifndef NENCLAVE
   int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, verbose);
   
+#else
+  int enclave_result;
+  sgx_enclave_id_t eid = global_eid;
+  sgx_status_t sgx_enclave_stat = enclave_main(eid, &enclave_result, network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, verbose); 
+#endif  
+
   if(verbose){
     cout << "Enclave returned " << enclave_result << endl;
   }
