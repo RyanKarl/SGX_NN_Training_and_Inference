@@ -510,9 +510,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           print_out("Reading input from file...", false);
         }
         if(csv_getline(input_csv_filename, input_data, &data_label, data_height*data_width)){
-          std::string errmsg = "Failed to read input .csv: ";
-          errmsg += input_csv_filename;
-          print_out(errmsg.c_str(), true);
+          print_out("Failed to read input .csv", true);
           return 1;
         }
         if(verbose){
