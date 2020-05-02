@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include <vector>
 #include <string>
@@ -26,6 +27,8 @@ using std::ofstream;
 using std::cout;
 using std::cerr;
 using std::endl;
+
+#define STRUCTURE_BUFLEN 1024
 
 //0 is height, 1 is width
 int frievald(float * a, float * b, float * c, 
@@ -187,11 +190,33 @@ Lines after are in the format:
 height width filename type
 */
 //TODO make this an OCALL
-int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, int & input_height, int & input_width){
-  
-  ifstream network_ifs(network_structure_fname);
+
+
+
+int file_to_string(const char * fname, char * out){
+  ifstream network_ifs(fname);
+  std::ostringstream oss;
   assert(network_ifs.good());
-  layer_files.clear();
+  
+  oss << network_ifs.rdbuf();
+
+  unsigned int len = oss.str().size() + 1;
+  if(len >= STRUCTURE_BUFLEN){
+    return 1;
+  }
+  strncpy(out, oss.str().c_str(), len);
+  network_ifs.close();
+  return 0;
+}
+
+
+int parse_structure(const char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, int & input_height, int & input_width){
+  
+  char str_in[STRUCTURE_BUFLEN] = {'\0'};
+  if(file_to_string(network_structure_fname, str_in)){
+    //Error - out of buffer
+  }
+  std::istringstream network_ifs(str_in);
   //num_inputs is batch size
   network_ifs >> num_inputs >> input_height >> input_width;
   for(unsigned int i = 0; i < num_inputs; i++){
@@ -199,7 +224,7 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
     network_ifs >> lft.height >> lft.width >> lft.filename >> lft.type;
     layer_files.push_back(lft);
   }
-  network_ifs.close();
+  //network_ifs.close();
   return layer_files.size() == num_inputs? 0 : 1;
 }
 
@@ -446,8 +471,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   }
   if(verbose){
     print_out("Finished parsing network", false);
-  }
-  
+  }  
   
   num_layers = layer_files.size();
 
@@ -527,10 +551,20 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
       if(verbose){
         print_out("Sent input dimensions", false);
+#ifdef NENCLAVE
+        cout << "Input dimensions: " << data_height << ' ' << data_width << endl;
+#endif        
       }    
      
       if(write_stream((void *) input_data, sizeof(float)*data_height*data_width)){
         print_out("Failed writing input", true);
+        assert(input_data);
+#ifdef NENCLAVE
+        for(int i = 0; i < data_height*data_width; i++){
+          cout << input_data[i] << ' ';
+        }
+        cout << endl;
+#endif        
         return 1;
       }
       if(verbose){
@@ -584,6 +618,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         if(write_stream((void *) failed_resp, sizeof(failed_resp))){
           //Error
         }
+        print_out("Frievald's algorithm failed!", true);
         return 1;
       }
 
