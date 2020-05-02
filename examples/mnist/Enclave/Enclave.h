@@ -55,7 +55,7 @@ void mask(float * data, int len, float * mask_data);
 
 void unmask(float * data, int width, int height, float * mask_data, float * input_layer);
 
-void print_out(const char * msg, bool error);
+void print_out(const char * msg, int error);
 
 #if defined(__cplusplus)
 }
