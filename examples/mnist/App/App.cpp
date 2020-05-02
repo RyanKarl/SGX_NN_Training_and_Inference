@@ -1,6 +1,6 @@
 //App.cpp
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
-//gcc App/App.cpp Enclave/Enclave.cpp -pedantic -Wall -Werror -O3 -o enclave_driver -lm -DNENCLAVE
+//g++ App/App.cpp Enclave/Enclave.cpp -pedantic -Wall -Werror -O3 -o ./app -lm -DNENCLAVE
 
 //Defined first to go before other standard libs
 /*
