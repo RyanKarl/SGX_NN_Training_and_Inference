@@ -55,7 +55,13 @@ void mask(float * data, int len, float * mask_data);
 
 void unmask(float * data, int width, int height, float * mask_data, float * input_layer);
 
+int init_streams(char * inpipe_fname, char * outpipe_fname);
+int read_stream(void * buf, size_t total_bytes);
+int write_stream(void * buf, size_t total_bytes);
+int close_streams();
+int csv_getline(char * input_csv_name, float * vals, unsigned char * label, size_t num_vals);
 void print_out(char * msg, int error);
+int file_to_string(char * fname, char * out);
 
 #if defined(__cplusplus)
 }
