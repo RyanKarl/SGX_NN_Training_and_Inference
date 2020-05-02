@@ -49,7 +49,11 @@ int activate(float * data, int height, int width); //Reference or value?
 int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width,
  float * data_out, int out_height, int out_width);
 
+
+#ifndef ENCLAVE_MAIN_F
+#define ENCLAVE_MAIN_F
 int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
+#endif
 
 void mask(float * data, int len, float * mask_data);
 
