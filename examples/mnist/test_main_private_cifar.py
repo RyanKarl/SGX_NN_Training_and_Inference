@@ -69,7 +69,7 @@ class NeuralNet(nn.Module):
         # self.fc4 = LinearAlt(hidden_size, hidden_size, bias = None)
         # self.tanh = nn.Tanh()
         self.fc5 = LinearAltLast(hidden_size, num_classes, bias = None)
-        self.sm = nn.Softmax()
+        # self.sm = nn.Softmax()
 
         self.flat = nn.Flatten()
 
@@ -99,7 +99,7 @@ class NeuralNet(nn.Module):
         # out = self.fc4(out)
         # out = self.tanh(out)
         out = self.fc5(out)
-        out = self.sm(out)
+        # out = self.sm(out)
         # print(out)
         # print(out)
 

@@ -7,6 +7,7 @@ import os
 import sys
 import struct
 import numpy as np
+from subprocess import PIPE
 
 ENCLAVE_EXE_PATH = "./app"
 TMPDIR = "/tmp/"
@@ -23,10 +24,15 @@ NUM_MATRICES = 3
 MAT_DIM = 2
 BUFFERING=-1
 
+#Hardcoded names
+INPUT_FILE = 'fc1.txt'
+ARCH_FILE = 'Master_Arch.txt'
+LAYER_FILE = 'weights16.txt'
+
 class SPController:
 
   #Initialization does not actually start subprocess
-  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False):
+  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False, use_std_io=False):
     self.pipe_names = pipe_names
     for producer, filepath in self.pipe_names.items():
       #Clear any previous file
@@ -39,6 +45,9 @@ class SPController:
     self.args = list()   
     self.debug = debug 
     self.args = [enclave_executable, "-i", self.pipe_names["gpu"], "-o", self.pipe_names["enclave"]]
+    self.use_std_io = use_std_io
+    if not use_std_io:
+      self.args += ["-c", INPUT_FILE, "-s", ARCH_FILE]
     #Pipe that python program writes to
     self.gpu_pipe_w = None
     #Pipe that enclave reads from
@@ -51,20 +60,24 @@ class SPController:
     if verbose > 0:
       for i in range(verbose):
         self.args.append("-v")
-    
-    #Popen starts the process
-    self.proc = subprocess.Popen(self.args)  
     #No buffering to force immediate writes
-    self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=BUFFERING)
-    self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=BUFFERING)
-    if self.debug:
-      print("-i " + self.gpu_pipe_w)
-      print("-o " + self.enclave_pipe_r)
+    if not self.use_std_io:
+      self.proc = subprocess.Popen(self.args)  
+      self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=BUFFERING)
+      self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=BUFFERING)
+      if self.debug:
+        print("-i " + self.gpu_pipe_w)
+        print("-o " + self.enclave_pipe_r)
+    else:
+      self.proc = subprocess.Popen(self.args, stdout=PIPE, stdin=PIPE)  
+      self.gpu_pipe_w = self.proc.stdin
+      self.enclave_pipe_r = self.proc.stdout
       
+  #Deprecated    
   @staticmethod  
-  def validate_and_pack(input_matrices, raw_bytes=False):
+  def validate_and_pack_matrices(input_matrices, raw_bytes=False):
     if len(input_matrices) != NUM_MATRICES:
-      print("ERROR: Matrix list incorrect: " + str(data_shape))
+      print("ERROR: Matrix list incorrect: " + len(input_matrices))
       return None
       
     matrix_dims = list()
@@ -97,8 +110,9 @@ class SPController:
       
     return (header, input_data)  
 
-  @staticmethod validate_one_matrix(mat):
-    data_shape = im.shape
+  @staticmethod 
+  def validate_one_matrix(mat):
+    data_shape = mat.shape
     if len(data_shape) != MAT_DIM:
       print("ERROR: matrix non 2-dimensional")
       return None 
@@ -146,15 +160,18 @@ class SPController:
     if self.proc.poll() is not None:
       print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
       return None  
+
     enclave_response = self.enclave_pipe_r.read(num_floats*FLOAT_BYTES)
     if len(enclave_response) != num_floats*FLOAT_BYTES:
       print("ERROR: incorrect number of data bytes read in: " + str(len(enclave_response)))
       return None
     
     #Unpacks bytes into array of floats
-    float_resp = [struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)]
-    return float_resp
+    float_resp = np.asarray([struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)])
+    return np.reshape(float_resp, response_sizes)
+
   
+  #TODO figure out return vals
   def send_to_enclave(self, mult_result):  
     output_data = SPController.validate_one_matrix(mult_result)
     if output_data is None:
@@ -185,7 +202,7 @@ class SPController:
 
   #input_data is list of 3 float ndarrays (2-D) by default
   def query_enclave(self, input_matrices, raw_bytes=False):
-    packed_input = SPController.validate_and_pack(input_matrices, raw_bytes)
+    packed_input = SPController.validate_and_pack_matrices(input_matrices, raw_bytes)
     if packed_input is None:
       print("Bad input")
       return None
@@ -278,36 +295,38 @@ class SPController:
         
     
 #An example of how to use the SubProcess Controller
+#TODO strip out using std. IO
 def main():
-  size = int(sys.argv[1])
-  a = np.ones((size, size), dtype=float)
-  b = np.ones((size, size), dtype=float)
-  c = a @ b
-  arrs = [np.asarray(x) for x in [a, b, c]]
 
-  num_tests = 4
-  if(len(sys.argv) >= 2+1):
-    num_tests = int(sys.argv[2])
-  #Use this to generate output without actually running the subprocess
-  if '-f' in sys.argv:
-    parsed = SPController.validate_and_pack(arrs)
-    for i in range(num_tests):
-      sys.stdout.buffer.write(parsed[0]+parsed[1])
+
+  #Create standalone file for input
+  if len(sys.argv) >= 2:
+    outfile_name = sys.argv[1]
+    dims = [4, 4]
+    output = np.zeros(dims)
+    packed_output = SPController.validate_one_matrix(output)
+    fout = open(outfile_name, 'wb', buffering=BUFFERING)
+    fout.write(packed_output[0])
+    fout.write(packed_output[1])
+    fout.close()
     return
   
   #initializes SPController
   spc = SPController(debug=False)
+
   spc.start(verbose=0)
   
-  for i in range(num_tests):
-    ret = spc.query_enclave(arrs)
-    if ret is None:
-      print("Error in subprocess on round " + str(i) + ", exiting\n")
-      return
-    elif len(ret) == 0:
-      print("Frievald's Algorithm failed on round " + str(i) + "!\n")  
-    else:  
-      print("Response on round " + str(i) + ": " + str(ret) + '\n')
+  a = spc.read_matrix_from_enclave()
+  if a is None:
+    print("ERROR in reading input")
+    
+  b = spc.read_matrix_from_enclave()
+  if b is None:
+    print("ERROR in reading weights")
+    
+  c = a @ b
+  spc.send_to_enclave(c)  
+  
   spc.close()
   return  
     

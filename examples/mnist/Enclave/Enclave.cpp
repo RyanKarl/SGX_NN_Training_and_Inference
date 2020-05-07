@@ -8,19 +8,28 @@
 #include <unistd.h>
 #include <math.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include <vector>
 #include <string>
 #include <fstream>
+#include <iostream>
+#include <sstream>
 
 
 #include "Enclave.h"
 #include "utilities.h"
 
+
 using std::vector;
 using std::string;
 using std::ifstream;
 using std::ofstream;
+using std::cout;
+using std::cerr;
+using std::endl;
+
+#define STRUCTURE_BUFLEN 1024
 
 //0 is height, 1 is width
 int frievald(float * a, float * b, float * c, 
@@ -182,10 +191,33 @@ Lines after are in the format:
 height width filename type
 */
 //TODO make this an OCALL
-int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, int & input_height, int & input_width){
+
+
+
+int file_to_string(const char * fname, char * out){
+  ifstream network_ifs(fname);
+  std::ostringstream oss;
+  assert(network_ifs.good());
   
-  ifstream network_ifs(network_structure_fname);
-  layer_files.clear();
+  oss << network_ifs.rdbuf();
+
+  unsigned int len = oss.str().size() + 1;
+  if(len >= STRUCTURE_BUFLEN){
+    return 1;
+  }
+  strncpy(out, oss.str().c_str(), len);
+  network_ifs.close();
+  return 0;
+}
+
+
+int parse_structure(const char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, int & input_height, int & input_width){
+  
+  char str_in[STRUCTURE_BUFLEN] = {'\0'};
+  if(file_to_string(network_structure_fname, str_in)){
+    //Error - out of buffer
+  }
+  std::istringstream network_ifs(str_in);
   //num_inputs is batch size
   network_ifs >> num_inputs >> input_height >> input_width;
   for(unsigned int i = 0; i < num_inputs; i++){
@@ -193,31 +225,64 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
     network_ifs >> lft.height >> lft.width >> lft.filename >> lft.type;
     layer_files.push_back(lft);
   }
-  network_ifs.close();
+  //network_ifs.close();
   return layer_files.size() == num_inputs? 0 : 1;
 }
 
 #define MNIST_VALS 784
 
+/*
+static std::ifstream g_ifs;
+
+//TODO make these OCALLs
+std::istream & get_input_stream(const char * streamname){
+  if(streamname == NULL){
+    return std::cin;
+  }
+  else{
+    g_ifs = std::ifstream(streamname);
+    return g_ifs;
+  }
+}
+
 //Assumes the existence of a large enough buffer
-int csv_getline(const char * input_csv_name, float * vals, 
+int csv_getline(std::istream & ifs, float * vals, 
   char * label, size_t num_vals){
-
-  static std::ifstream ifs(input_csv_name);
-
-  ifs >> *label;
-
-  //*vals = (unsigned char *) malloc(num_vals*sizeof(unsigned char));
+  if(!ifs.good()){
+    return 1;
+  }
+  char comma_holder;
   for(unsigned int i = 0; i < num_vals; i++){
-    ifs >> (vals)[i];
+    ifs >> vals[i] >> comma_holder;
     //Normalize float value
     vals[i] /= (1 << CHAR_BIT);
   }
+  ifs >> *label;
+  return 0;
+}
+*/
+
+int csv_getline(char * csv_filename, float * vals, 
+  char * label, size_t num_vals){
+  static std::ifstream ifs(csv_filename);
+  if(!ifs.good()){
+    return 1;
+  }
+  
+  char comma_holder;
+  for(unsigned int i = 0; i < num_vals; i++){
+    ifs >> vals[i] >> comma_holder;
+    //Normalize float value
+    vals[i] /= (1 << CHAR_BIT);
+  }
+  ifs >> *label;
   return 0;
 }
 
 //Assume all buffers are allocated
 //Read in NORMALIZED values
+//WARNING: before using, update to properly read in csv
+/*
 int csv_getbatch(char * input_csv_name, float ** vals, unsigned int num_inputs, unsigned int num_vals, char * labels){
   std::ifstream ifs(input_csv_name);
   for(unsigned int i = 0; i < num_inputs; i++){
@@ -231,6 +296,7 @@ int csv_getbatch(char * input_csv_name, float ** vals, unsigned int num_inputs, 
   ifs.close();
   return 0;
 }
+*/
 
 int mask(float * input, float * masks, unsigned int input_size){
   for(unsigned int i = 0; i < input_size; i++){
@@ -259,11 +325,13 @@ int read_weight_file(const char * filename, int num_elements, float * buf){
   return 0;
 }
 
+//Assumes comma-delimited
 int read_weight_file_plain(const char * filename, int num_elements, float * buf){
   ifstream fs(filename);
   int i;
+  char comma_holder;
   for(i = 0; i < num_elements; i++){
-    fs >> buf[i];
+    fs >> buf[i] >> comma_holder;  
   }
   return (i == num_elements-1)? 0 : 1;
 }
@@ -283,6 +351,16 @@ int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
   return 0;
 }
 
+void print_layer_info(const vector<layer_file_t> & layers){
+#ifdef NENCLAVE
+  cout << "Layers info: " << endl;
+  for(const auto & l : layers){
+    cout << l.height << ' ' << l.width << ' ' << l.filename << ' ' << l.type << endl;
+  }
+#endif  
+  return;
+}
+
 //For inputs: read in entire batches to enclave memory from ordinary file through OCALLs, and free() data when done.
 
 static FILE * instream;
@@ -293,43 +371,37 @@ int init_streams(char * inpipe_fname, char * outpipe_fname){
   int input_pipe = 0;
   if(inpipe_fname){
     input_pipe = open(inpipe_fname, O_RDONLY);
+    if(input_pipe == -1){
+      fprintf(stderr, "ERROR: could not open input pipe %s\n", inpipe_fname);
+      return 1;
+    }
+    instream = fdopen(input_pipe, "r");
   } 
-  if(input_pipe == -1){
-    fprintf(stderr, "ERROR: could not open input pipe %s\n", inpipe_fname);
-    return 1;
-  }
-  int output_pipe = 0;
-  if(outpipe_fname){
-    output_pipe = open(outpipe_fname, O_WRONLY);
-  }  
-  if(output_pipe == -1){
-    fprintf(stderr, "ERROR: could not open output pipe %s\n", outpipe_fname);
-    return 1;
-  }
-
-  if(!inpipe_fname){
+  else{
     instream = stdin;
   }
+  
+  int output_pipe = 0;
+  if(outpipe_fname){
+#define OUTFILE_PERMS 0644    
+    output_pipe = open(outpipe_fname, O_WRONLY | O_CREAT, OUTFILE_PERMS);
+    if(output_pipe == -1){
+      fprintf(stderr, "ERROR: could not open output pipe %s\n", outpipe_fname);
+      return 1;
+    }
+    outstream = fdopen(output_pipe, "w");
+  }  
   else{
-    instream = fdopen(input_pipe, "r");
-  }
-  if(!outpipe_fname){
     outstream = stdout;
   }
-  else{
-    outstream = fdopen(output_pipe, "w");
-  }
-
   return 0;
-
 }
 
 //Requires a buffer to be allocated
 int read_stream(void * buf, size_t total_bytes){
   int res = fread((void *) buf, 1, total_bytes, instream);
-  return (res != 0);
+  return (res != 0)? 0 : 1;
 }
-
 
 
 int write_stream(void * buf, size_t total_bytes){
@@ -337,9 +409,8 @@ int write_stream(void * buf, size_t total_bytes){
     return 1;
   }
   int res = fwrite((void *) buf, total_bytes, 1, outstream);
-  //Optional for performance
-  //fflush(oustream);
-  return (res != 0);
+  fflush(outstream);
+  return (res != 0)? 0 : 1;
 }
 
 int close_streams(){
@@ -353,48 +424,69 @@ int close_streams(){
     free(outstream);
     outstream = NULL;
   }
-  /*
-  if(use_std_io){
-    close(input_pipe);
-    close(output_pipe);
-  }
-  */
   return 0;
 }
 
-void mask(float * data, int len, float * mask_data){
+void mask(float * data, int len, float * mask_data, bool do_mask=true){
+  if(!do_mask){
+    return;
+  }
   for(int i = 0; i < len; i++){
     data[i] += mask_data[i];
   }
   return;
 }
 
+void print_out(char * msg, int error){
+  if(error){
+    cerr << msg << endl;
+  }
+  else{
+    cout << msg << endl;
+  }
+}
+
 //Need OCALLS for pipe I/O, setup, teardown
-int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname){
+int enclave_main(char * network_structure_fname, char * input_csv_filename, 
+  char * inpipe_fname, char * outpipe_fname, int verbose){
 
   unsigned int num_layers;
   vector<layer_file_t> layer_files;
   unsigned int num_inputs;
   int input_height; 
-  int input_width;
+  int input_width; 
+  
+  if(init_streams(inpipe_fname, outpipe_fname)){
+    print_out("ERROR: could not initialize I/O streams", true);
+    return -1;
+  }
+  if(verbose){
+    print_out("Initialized I/O streams", false);
+  }
   
 
   if(parse_structure(network_structure_fname, layer_files, 
     num_inputs, input_height, input_width)){
-    //Error!
+    print_out("Network parsing failed!", true);
+    return 1;
   }
+  if(verbose){
+    print_out("Finished parsing network", false);
+  }  
   
   num_layers = layer_files.size();
-
 
   float ** layer_data;
   layer_data = (float **) malloc(sizeof(float *) * num_layers);
   //Read in all layer data
   if(read_all_weights(layer_files, layer_data)){
-    //Error
+    print_out("Failed to read weights", true);
+    return 1;
   }
-  
-  //TODO determine how to get num. layers from a place besides master arch. file
+  if(verbose){
+    print_out("Read in weights", false);
+  }
+
   for(unsigned int input_idx = 0; input_idx < num_inputs; input_idx++){
   
     float * input_data;
@@ -415,39 +507,83 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename, char
           //Error
         }    
         //Read to the buffer
+        if(verbose){
+          print_out("Reading input from file...", false);
+        }
         if(csv_getline(input_csv_filename, input_data, &data_label, data_height*data_width)){
-          //Error
+          print_out("Failed to read input .csv", true);
+          return 1;
+        }
+        if(verbose){
+          print_out("Read input from file", false);
         }
       }
       else{
         data_height = layer_files[layer_idx].height;
         data_width = layer_files[layer_idx].width;
+        if(verbose){
+          print_out("Using previous layer's result as input", false);
+        }
       }
       //If not first layer (i.e. raw input), then the input data is already initialized
       
       //Mask the current input
       //First, get the random mask
-      float * mask_data = (float *) malloc(sizeof(float) * data_height*data_width);
+      float * mask_data = (float *) malloc(sizeof(float)*data_height*data_width);
       //Cast should be explicit, for the non-SGX version
-      rand_bytes((unsigned char *) mask_data, sizeof(float) * data_height*data_width);
+      rand_bytes((unsigned char *) mask_data, sizeof(float)*data_height*data_width);
       //Next, mask the data
-      mask(input_data, data_height*data_width, mask_data);
+      mask(input_data, data_height*data_width, mask_data, false);
+      if(verbose){
+        print_out("Finished masking", false);
+      }
 
       
       //Send it and a layer of weights to the GPU
       //Send first dimensions, then data (twice)
       int out_dims[2] = {data_height, data_width};
+     
+
       if(write_stream((void *) out_dims, sizeof(out_dims))){
-        //Error
+        print_out("Failed writing input dimensions", true);
+        return 1;
       }
+      if(verbose){
+        print_out("Sent input dimensions", false);
+#ifdef NENCLAVE
+        cout << "Input dimensions: " << data_height << ' ' << data_width << endl;
+#endif        
+      }    
+     
       if(write_stream((void *) input_data, sizeof(float)*data_height*data_width)){
-        //Error
+        print_out("Failed writing input", true);
+        assert(input_data);
+#ifdef NENCLAVE
+        for(int i = 0; i < data_height*data_width; i++){
+          cout << input_data[i] << ' ';
+        }
+        cout << endl;
+#endif        
+        return 1;
       }
+      if(verbose){
+        print_out("Sent input", false);
+      }
+      
       if(write_stream((void *) out_dims, sizeof(out_dims))){
-        //Error
+        print_out("Failed writing weights dimensions", true);
+        return 1;
       }
+      if(verbose){
+        print_out("Sent weights dimensions", false);
+      }
+      
       if(write_stream((void *) layer_data[layer_idx], sizeof(float)*data_height*data_width)){
-        //Error
+        print_out("Failed writing weights", true);
+        return 1;
+      }
+      if(verbose){
+        print_out("Sent weights", false);
       }
       
       //Get back a result C ?= A*B
@@ -455,13 +591,21 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename, char
       int in_dims[2] = {-1, -1};
       int next_height, next_width;
       if(read_stream((void *) in_dims, sizeof(in_dims))){
-        //Error
+        print_out("Failed reading in result dimensions", true);
+        return 1;
+      }
+      if(verbose){
+        print_out("Read in result dimensions", false);
       }
       next_height = in_dims[0];
       next_width = in_dims[1];
       float * gpu_result = (float *) malloc(sizeof(float)*next_height*next_width);
       if(read_stream((void *) gpu_result, sizeof(float)*next_height*next_width)){
-        //Error
+        print_out("Failed reading in result", true);
+        return 1;
+      }
+      if(verbose){
+        print_out("Read in result", false);
       }
 
       //Validate C through Frievald's algorithm
@@ -473,6 +617,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename, char
         if(write_stream((void *) failed_resp, sizeof(failed_resp))){
           //Error
         }
+        print_out("Frievald's algorithm failed!", true);
         return 1;
       }
 
