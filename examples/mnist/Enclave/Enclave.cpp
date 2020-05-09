@@ -11,7 +11,6 @@
 
 #include <vector>
 #include <string>
-#include <sstream>
 
 #include "Enclave.h"
 
@@ -192,16 +191,35 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
   
   char str_in[STRUCTURE_BUFLEN] = {'\0'};
   if(file_to_string(network_structure_fname, str_in)){
-    //Error - out of buffer
+    return 1;
   }
-  std::stringstream network_ifs(str_in);
+  //std::stringstream network_ifs(str_in);
+
+
+  num_inputs = atoi(strtok(str_in, " \n"));
+  input_height = atoi(strtok(NULL, " \n"));
+  input_width = atoi(strtok(NULL, " \n"));
+
+  for(unsigned int i = 0; i < num_inputs; i++){
+    layer_file_t lft;
+
+    lft.height = atoi(strtok(NULL, " \n"));
+    lft.width = atoi(strtok(NULL, " \n"));
+    lft.filename = strtok(NULL, " \n");
+    lft.type = atoi(strtok(NULL, " \n"));
+
+    layer_files.push_back(lft);
+  }
+
   //num_inputs is batch size
+  /*
   network_ifs >> num_inputs >> input_height >> input_width;
   for(unsigned int i = 0; i < num_inputs; i++){
     layer_file_t lft;
     network_ifs >> lft.height >> lft.width >> lft.filename >> lft.type;
     layer_files.push_back(lft);
   }
+  */
   //network_ifs.close();
   return layer_files.size() == num_inputs? 0 : 1;
 }
