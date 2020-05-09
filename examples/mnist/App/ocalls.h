@@ -8,6 +8,7 @@
 #include <math.h>
 #include <fcntl.h>
 #include <string.h>
+#include <limits.h>
 
 #include <vector>
 #include <string>
