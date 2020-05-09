@@ -20,7 +20,6 @@
 #include "Enclave.h"
 #include "utilities.h"
 
-
 using std::vector;
 using std::string;
 using std::ifstream;

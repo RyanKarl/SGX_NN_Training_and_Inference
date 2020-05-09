@@ -116,11 +116,7 @@ int file_to_string(const char * fname, char * out){
  float * data_out, int out_height, int out_width);
 >>>>>>> parent of 96e73a5... Moved to header-only for enclave stuff
 
-
-#ifndef ENCLAVE_MAIN_F
-#define ENCLAVE_MAIN_F
 int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
-#endif
 
 void mask(float * data, int len, float * mask_data);
 
