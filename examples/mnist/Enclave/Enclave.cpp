@@ -7,7 +7,6 @@
 #include <assert.h>
 #include <unistd.h>
 #include <math.h>
-#include <fcntl.h>
 #include <string.h>
 
 #include <vector>
