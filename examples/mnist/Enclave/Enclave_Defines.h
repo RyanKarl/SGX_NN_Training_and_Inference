@@ -25,7 +25,6 @@ typedef struct {
 #define CONVOLUTIONAL 1
 #define POOLING 2
 
-#if defined(__cplusplus)
 #include <string>
 
 typedef struct {
@@ -34,8 +33,6 @@ typedef struct {
 	std::string filename;
 	int type;
 } layer_file_t;
-
-#endif
 
 
 #endif
