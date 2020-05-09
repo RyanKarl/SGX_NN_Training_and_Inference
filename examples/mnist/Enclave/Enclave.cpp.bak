@@ -1,11 +1,7 @@
-//Enclave.h
+//enclave_functions.c
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
-#ifndef ENCLAVE_FUNCTIONS_H
-#define ENCLAVE_FUNCTIONS_H
-
-#include "Enclave_Defines.h"
-
+//#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -14,42 +10,14 @@
 #include <fcntl.h>
 #include <string.h>
 
-#if defined(__cplusplus)
-
-
 #include <vector>
 #include <string>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
-extern "C" {
-#endif
 
-#ifndef NENCLAVE
-# include <sgx_trts.h>
-# define rand_bytes(r, n_bytes) (sgx_read_rand((unsigned char *) r, n_bytes) )
-#else
-# include <stdlib.h> //Need this for rand
-# include <assert.h>
-inline void rand_bytes(unsigned char * r, size_t n_bytes){
-  assert(r);
-  for(size_t i = 0; i < n_bytes; i++){
-  	r[i] = (unsigned char) rand();
-  }
-  /*
-  for(int i = 0; i < n; i++){
-    r[i] = 0;
-    for(unsigned int j = 0; j < sizeof(int)*CHAR_BIT; j++){
-      r[i] |= (int)((1 & rand()) << j);
-    }
-  }
-  */
-  return;
-}
-#endif
-
-
+#include "Enclave.h"
 #include "utilities.h"
 
 
@@ -142,9 +110,9 @@ int verify_frievald(float * data, int a_height, int a_width, int b_height, int b
   matrix_offsets[1] = matrix_offsets[0] + (a_height*a_width);
   matrix_offsets[2] = matrix_offsets[1] + (b_height*b_width);
   for(unsigned int j = 0; j < K_PROBABILITY; j++){
-    if(frievald(matrix_offsets[0], matrix_offsets[1], matrix_offsets[2], a_height, a_width, b_height, b_width, c_height, c_width)){
-      return 1;
-    }
+  	if(frievald(matrix_offsets[0], matrix_offsets[1], matrix_offsets[2], a_height, a_width, b_height, b_width, c_height, c_width)){
+  		return 1;
+  	}
   }
   return 0;
 }
@@ -223,6 +191,7 @@ Lines after are in the format:
 height width filename type
 */
 //TODO make this an OCALL
+
 
 
 int file_to_string(const char * fname, char * out){
@@ -329,14 +298,12 @@ int csv_getbatch(char * input_csv_name, float ** vals, unsigned int num_inputs, 
 }
 */
 
-/*
 int mask(float * input, float * masks, unsigned int input_size){
   for(unsigned int i = 0; i < input_size; i++){
     input[i] += masks[i];
   }
   return 0;
 }
-*/
 
 //Assumes a buffer is allocated
 //This function should be an OCALL
@@ -460,7 +427,7 @@ int close_streams(){
   return 0;
 }
 
-void mask(float * data, int len, float * mask_data, int do_mask){
+void mask(float * data, int len, float * mask_data, bool do_mask=true){
   if(!do_mask){
     return;
   }
@@ -687,10 +654,3 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   return 0;
 
 }
-
-
-#if defined(__cplusplus)
-}
-#endif
-
-#endif
