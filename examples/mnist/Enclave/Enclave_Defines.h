@@ -15,6 +15,8 @@
 # define INDEX_BITARR(f, i) (( (f[i / CHAR_BIT]) >> (i%CHAR_BIT)) & 1)
 # define FLOAT_CMP(a, b) (a != b)
 
+#define STRUCTURE_BUFLEN 1024
+
 
 typedef struct {
 	int height;

@@ -11,10 +11,7 @@
 
 #include <vector>
 #include <string>
-#include <fstream>
-#include <iostream>
 #include <sstream>
-
 
 #include "Enclave.h"
 
@@ -24,12 +21,6 @@
 
 using std::vector;
 using std::string;
-using std::ifstream;
-using std::ofstream;
-using std::cout;
-using std::cerr;
-using std::endl;
-
 
 
 //0 is height, 1 is width
@@ -203,7 +194,7 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
   if(file_to_string(network_structure_fname, str_in)){
     //Error - out of buffer
   }
-  std::istringstream network_ifs(str_in);
+  std::stringstream network_ifs(str_in);
   //num_inputs is batch size
   network_ifs >> num_inputs >> input_height >> input_width;
   for(unsigned int i = 0; i < num_inputs; i++){
@@ -296,12 +287,23 @@ int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
 #ifdef NENCLAVE
     read_weight_file_plain(layers[i].filename.c_str(), layers[i].height * layers[i].width, bufs[i]);
 #else
-    read_weight_file(layers[i].filename.c_str(), layers[i].height * layers[i].width, bufs[i]);
+    //Need data in non-const container for ocall
+    size_t len = layers[i].filename.size();
+    char * fname_buf = malloc(len+1);
+    strncat(fname_buf, len, layers[i].filename.c_str());
+    read_weight_file(fname_buf, layers[i].height * layers[i].width, bufs[i]);
+    free(fname_buf);
 #endif    
     
   }
   return 0;
 }
+
+#ifdef NENCLAVE
+#include <iostream>
+using std::cout;
+using std::endl;
+#endif
 
 //Debugging function
 void print_layer_info(const vector<layer_file_t> & layers){

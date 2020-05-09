@@ -24,8 +24,6 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-#define STRUCTURE_BUFLEN 1024
-
 
 static FILE * instream;
 static FILE * outstream;
