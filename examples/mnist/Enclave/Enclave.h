@@ -52,7 +52,7 @@ int verify_and_activate(float * data_in, int a_height, int a_width, int b_height
 
 #ifndef ENCLAVE_MAIN_F
 #define ENCLAVE_MAIN_F
-int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
+//int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
 #endif
 
 void mask(float * data, int len, float * mask_data);

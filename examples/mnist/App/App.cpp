@@ -28,6 +28,9 @@ malloc_consolidate();\
 using std::cout;
 using std::endl;
 
+
+#include "../Enclave/Enclave.h"
+
 #ifndef NENCLAVE
 
 # include "sgx_error.h"       /* sgx_status_t */
@@ -221,9 +224,11 @@ int initialize_enclave(void)
     return 0;
 }
 
-#else
-# include "../Enclave/Enclave.h"
 #endif
+
+
+//#include "../Enclave/Enclave.h"
+
 
 #ifndef NENCLAVE
 int SGX_CDECL main(int argc, char ** argv){
