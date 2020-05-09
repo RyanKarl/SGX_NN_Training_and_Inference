@@ -92,8 +92,7 @@ int close_streams(){
 }
 
 
-int csv_getline(char * csv_filename, float * vals, 
-  char * label, size_t num_vals){
+int csv_getline(char * csv_filename, float * vals, char * label, size_t num_vals){
   static std::ifstream ifs(csv_filename);
   if(!ifs.good()){
     return 1;
@@ -137,7 +136,7 @@ int file_to_string(char * fname, char * out){
 
 //Assumes a buffer is allocated
 //This function should be an OCALL
-int read_weight_file(const char * filename, size_t num_elements, float * buf){
+int read_weight_file(char * filename, size_t num_elements, float * buf){
   if(!num_elements){
     return 1;
   }
