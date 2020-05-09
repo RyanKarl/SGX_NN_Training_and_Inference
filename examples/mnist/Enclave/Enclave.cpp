@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <math.h>
 #include <string.h>
-#include <fcntl.h>
 
 #include <vector>
 #include <string>
@@ -18,7 +17,6 @@
 
 
 #include "Enclave.h"
-#include "utilities.h"
 
 #ifdef NENCLAVE
 # include "../App/ocalls.h"
