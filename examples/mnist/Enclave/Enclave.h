@@ -46,42 +46,7 @@ int activate(float * data, int height, int width); //Reference or value?
 
 //Trust that data_in and data_out have the correct size
 //Buffers must be allocated outside the enclave!
-int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width,
-<<<<<<< HEAD
- float * data_out, int out_height, int out_width){
-  //Copy data to enclave space
-  //Validate data here
-  if(a_height < 0 || a_width < 0 ||
-     b_height < 0 || b_width < 0 ||
-     c_height < 0 || c_width < 0 ||
-     out_height < 0 || out_width < 0){
-    return 1;
-  }
-  int mult_ptr_offset = (a_height*a_width) + (b_height*b_width);
-  int total_input_elts = mult_ptr_offset + (c_height*c_width);
-  float * enclave_data = (float *) malloc(total_input_elts*sizeof(float));
-  for(int i = 0; i < total_input_elts; i++){
-    enclave_data[i] = data_in[i];
-  }
-  
-  if(verify_frievald(enclave_data, a_height, a_width, b_height, b_width, c_height, c_width)){
-    free(enclave_data);
-    enclave_data = NULL;
-    return 1;
-  }
-  
-  float * activation_buffer_enclave = enclave_data + mult_ptr_offset;
-  if(activate(activation_buffer_enclave, c_height, c_width)){
-    free(enclave_data);
-    enclave_data = NULL;
-    return 1;
-  }
-  
-  free(enclave_data);
-  enclave_data = NULL;
-  return 0;
-
-}
+int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width, float * data_out, int out_height, int out_width);
 
 /*
 Suggested format for network structure files:
@@ -91,35 +56,9 @@ height width filename type
 */
 //TODO make this an OCALL
 
-<<<<<<< HEAD
 
-int file_to_string(const char * fname, char * out){
-  ifstream network_ifs(fname);
-  std::ostringstream oss;
-  assert(network_ifs.good());
-  
-  oss << network_ifs.rdbuf();
-
-  unsigned int len = oss.str().size() + 1;
-  if(len >= STRUCTURE_BUFLEN){
-    return 1;
-  }
-  strncpy(out, oss.str().c_str(), len);
-  network_ifs.close();
-  return 0;
-}
-
-=======
- float * data_out, int out_height, int out_width);
->>>>>>> parent of 96e73a5... Moved to header-only for enclave stuff
 
 int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
-=======
-#ifndef ENCLAVE_MAIN_F
-#define ENCLAVE_MAIN_F
-int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
-#endif
->>>>>>> parent of 7d1c7e1... Preparing to move everything to headers
 
 void mask(float * data, int len, float * mask_data);
 
@@ -129,9 +68,10 @@ int init_streams(char * inpipe_fname, char * outpipe_fname);
 int read_stream(void * buf, size_t total_bytes);
 int write_stream(void * buf, size_t total_bytes);
 int close_streams();
-int csv_getline(char * input_csv_name, float * vals, unsigned char * label, size_t num_vals);
+int csv_getline(char * input_csv_name, float * vals, char * label, size_t num_vals);
 void print_out(char * msg, int error);
 int file_to_string(char * fname, char * out);
+int read_weight_file(char * filename, size_t num_elements, float * buf);
 
 #if defined(__cplusplus)
 }

@@ -35,6 +35,7 @@ using std::endl;
 # include "sgx_urts.h"
 
 # include "Enclave_u.h" //Enclave headers
+# include "ocalls.h" //OCALL implementations
 
 # include <pwd.h>
 # define MAX_PATH FILENAME_MAX
