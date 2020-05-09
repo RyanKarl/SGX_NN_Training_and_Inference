@@ -285,7 +285,7 @@ int mask(float * input, float * masks, unsigned int input_size){
 }
 
 
-
+#ifdef NENCLAVE
 //Assumes comma-delimited
 int read_weight_file_plain(const char * filename, int num_elements, float * buf){
   ifstream fs(filename);
@@ -296,6 +296,7 @@ int read_weight_file_plain(const char * filename, int num_elements, float * buf)
   }
   return (i == num_elements-1)? 0 : 1;
 }
+#endif
 
 //Assumes a buffer is allocated
 int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
@@ -307,8 +308,8 @@ int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
 #else
     //Need data in non-const container for ocall
     size_t len = layers[i].filename.size();
-    char * fname_buf = malloc(len+1);
-    strncat(fname_buf, len, layers[i].filename.c_str());
+    char * fname_buf = (char *) malloc(len+1);
+    strncat(fname_buf, layers[i].filename.c_str(), len);
     read_weight_file(fname_buf, layers[i].height * layers[i].width, bufs[i]);
     free(fname_buf);
 #endif    
