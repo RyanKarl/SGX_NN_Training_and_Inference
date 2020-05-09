@@ -16,6 +16,8 @@
 #include <iostream>
 #include <sstream>
 
+#include "../Enclave/Enclave_Defines.h"
+
 using std::vector;
 using std::string;
 using std::ifstream;
