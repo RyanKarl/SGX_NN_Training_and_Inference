@@ -48,6 +48,7 @@ int activate(float * data, int height, int width); //Reference or value?
 //Buffers must be allocated outside the enclave!
 int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width,
 <<<<<<< HEAD
+<<<<<<< HEAD
  float * data_out, int out_height, int out_width){
   //Copy data to enclave space
   //Validate data here
@@ -108,6 +109,9 @@ int file_to_string(const char * fname, char * out){
   return 0;
 }
 
+=======
+ float * data_out, int out_height, int out_width);
+>>>>>>> parent of 96e73a5... Moved to header-only for enclave stuff
 =======
  float * data_out, int out_height, int out_width);
 >>>>>>> parent of 96e73a5... Moved to header-only for enclave stuff
