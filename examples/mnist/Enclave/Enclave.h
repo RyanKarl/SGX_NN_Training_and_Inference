@@ -91,6 +91,7 @@ height width filename type
 */
 //TODO make this an OCALL
 
+<<<<<<< HEAD
 
 int file_to_string(const char * fname, char * out){
   ifstream network_ifs(fname);
@@ -113,6 +114,12 @@ int file_to_string(const char * fname, char * out){
 >>>>>>> parent of 96e73a5... Moved to header-only for enclave stuff
 
 int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
+=======
+#ifndef ENCLAVE_MAIN_F
+#define ENCLAVE_MAIN_F
+int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
+#endif
+>>>>>>> parent of 7d1c7e1... Preparing to move everything to headers
 
 void mask(float * data, int len, float * mask_data);
 
