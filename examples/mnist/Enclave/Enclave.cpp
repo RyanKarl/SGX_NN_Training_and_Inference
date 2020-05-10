@@ -18,6 +18,7 @@
 # include "Enclave.h"
 # include "../App/ocalls.h"
 #else
+# include "Enclave_Defines.h"
 # include "Enclave_t.h"
 #endif
 
