@@ -12,10 +12,13 @@
 #include <vector>
 #include <string>
 
-#include "Enclave.h"
+
 
 #ifdef NENCLAVE
+# include "Enclave.h"
 # include "../App/ocalls.h"
+#else
+# include "Enclave_t.h"
 #endif
 
 using std::vector;
@@ -386,7 +389,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
 
 #ifdef NENCLAVE
-  init_streams_ret = init_streams(inpipe_fname, outpipe_fname);
+  int ocall_ret = init_streams(inpipe_fname, outpipe_fname);
 #else
   ocall_status = init_streams(&ocall_ret, inpipe_fname, outpipe_fname);
   //TODO check result
