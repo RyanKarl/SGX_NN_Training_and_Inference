@@ -190,9 +190,21 @@ height width filename type
 int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, int & input_height, int & input_width){
   
   char str_in[STRUCTURE_BUFLEN] = {'\0'};
+
+  
+
+#ifdef NENCLAVE
   if(file_to_string(network_structure_fname, str_in)){
     return 1;
   }
+#else
+  sgx_status_t ocall_status;
+  int ocall_ret;
+  ocall_status = file_to_string(&ocall_ret, network_structure_fname, str_in);
+  if(ocall_ret){
+    return 1;
+  }
+#endif  
   //std::stringstream network_ifs(str_in);
 
 
@@ -310,8 +322,14 @@ int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
     size_t len = layers[i].filename.size();
     char * fname_buf = (char *) malloc(len+1);
     strncat(fname_buf, layers[i].filename.c_str(), len);
-    read_weight_file(fname_buf, layers[i].height * layers[i].width, bufs[i]);
+    sgx_status_t ocall_status;
+    int ocall_ret;
+    ocall_status = read_weight_file(&ocall_ret, fname_buf, layers[i].height * layers[i].width, bufs[i]);
     free(fname_buf);
+    if(ocall_ret){
+      return 1;
+    }
+    
 #endif    
     
   }
@@ -360,8 +378,20 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int num_inputs;
   int input_height; 
   int input_width; 
-  
-  if(init_streams(inpipe_fname, outpipe_fname)){
+
+#ifndef NENCLAVE
+  sgx_status_t ocall_status;
+  int ocall_ret;
+#endif  
+
+
+#ifdef NENCLAVE
+  init_streams_ret = init_streams(inpipe_fname, outpipe_fname);
+#else
+  ocall_status = init_streams(&ocall_ret, inpipe_fname, outpipe_fname);
+  //TODO check result
+#endif  
+  if(ocall_ret){
     print_out("ERROR: could not initialize I/O streams", true);
     return -1;
   }
@@ -415,10 +445,18 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         if(verbose){
           print_out("Reading input from file...", false);
         }
+#ifdef NENCLAVE        
         if(csv_getline(input_csv_filename, input_data, &data_label, data_height*data_width)){
           print_out("Failed to read input .csv", true);
           return 1;
         }
+#else
+        ocall_status = csv_getline(&ocall_ret, input_csv_filename, input_data, &data_label, data_height*data_width);
+        if(ocall_ret){
+          print_out("Failed to read input .csv", true);
+          return 1;
+        }
+#endif        
         if(verbose){
           print_out("Read input from file", false);
         }
@@ -448,45 +486,72 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Send first dimensions, then data (twice)
       int out_dims[2] = {data_height, data_width};
      
-
+#ifdef NENCLAVE
       if(write_stream((void *) out_dims, sizeof(out_dims))){
         print_out("Failed writing input dimensions", true);
         return 1;
       }
+#else
+      ocall_status = write_stream(&ocall_ret, (void *) out_dims, sizeof(out_dims));
+      if(ocall_ret){
+        print_out("Failed writing input dimensions", true);
+        return 1;
+      }
+#endif      
       if(verbose){
-        print_out("Sent input dimensions", false);
-#ifdef NENCLAVE
-        cout << "Input dimensions: " << data_height << ' ' << data_width << endl;
-#endif        
+        print_out("Sent input dimensions", false);   
       }    
      
+#ifdef NENCLAVE  
       if(write_stream((void *) input_data, sizeof(float)*data_height*data_width)){
         print_out("Failed writing input", true);
         assert(input_data);
-#ifdef NENCLAVE
         for(int i = 0; i < data_height*data_width; i++){
           cout << input_data[i] << ' ';
         }
         cout << endl;
-#endif        
         return 1;
       }
+#else
+      ocall_status = write_stream(&ocall_ret, (void *) input_data, sizeof(float)*data_height*data_width);
+      if(ocall_ret){
+        print_out("Failed writing input", true);
+        return 1;
+      }
+#endif
+
       if(verbose){
         print_out("Sent input", false);
       }
       
+#ifdef NENCLAVE      
       if(write_stream((void *) out_dims, sizeof(out_dims))){
         print_out("Failed writing weights dimensions", true);
         return 1;
       }
+#else      
+      ocall_status = write_stream(&ocall_ret, (void *) out_dims, sizeof(out_dims));
+      if(ocall_ret){
+        print_out("Failed writing weights dimensions", true);
+        return 1;
+      }
+#endif      
       if(verbose){
         print_out("Sent weights dimensions", false);
       }
       
+#ifdef NENCLAVE      
       if(write_stream((void *) layer_data[layer_idx], sizeof(float)*data_height*data_width)){
         print_out("Failed writing weights", true);
         return 1;
       }
+#else
+      ocall_status = write_stream(&ocall_ret, (void *) layer_data[layer_idx], sizeof(float)*data_height*data_width);
+      if(ocall_ret){
+        print_out("Failed writing weights", true);
+        return 1;
+      }
+#endif      
       if(verbose){
         print_out("Sent weights", false);
       }
@@ -495,20 +560,38 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Read in dimensions, then data
       int in_dims[2] = {-1, -1};
       int next_height, next_width;
+#ifdef NENCLAVE      
       if(read_stream((void *) in_dims, sizeof(in_dims))){
         print_out("Failed reading in result dimensions", true);
         return 1;
       }
+#else
+      ocall_status = read_stream(&ocall_ret, (void *) in_dims, sizeof(in_dims));
+      if(ocall_ret){
+        print_out("Failed reading in result dimensions", true);
+        return 1;
+      }
+#endif      
       if(verbose){
         print_out("Read in result dimensions", false);
       }
+
+      //TODO check that these are valid
       next_height = in_dims[0];
       next_width = in_dims[1];
       float * gpu_result = (float *) malloc(sizeof(float)*next_height*next_width);
+#ifdef NENCLAVE
       if(read_stream((void *) gpu_result, sizeof(float)*next_height*next_width)){
         print_out("Failed reading in result", true);
         return 1;
       }
+#else
+      ocall_status = read_stream(&ocall_ret, (void *) gpu_result, sizeof(float)*next_height*next_width);
+      if(ocall_ret){
+        print_out("Failed reading in result", true);
+        return 1;
+      }
+#endif      
       if(verbose){
         print_out("Read in result", false);
       }
@@ -519,9 +602,19 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   data_height, data_width, data_height, data_width, next_height, next_width)){
         //Verification failed!
         int failed_resp[2] = {-1, -1};
+#ifdef NENCLAVE      
         if(write_stream((void *) failed_resp, sizeof(failed_resp))){
           //Error
+          print_out("Failed writing failure", true);
+          return 1;
         }
+#else
+        ocall_status = write_stream(&ocall_ret, (void *) failed_resp, sizeof(failed_resp));
+        if(ocall_ret){
+          print_out("Failed writing failure", true);
+          return 1;
+        }
+#endif        
         print_out("Frievald's algorithm failed!", true);
         return 1;
       }
