@@ -25,6 +25,29 @@
 using std::vector;
 using std::string;
 
+#ifndef NENCLAVE
+# include <sgx_trts.h>
+# define rand_bytes(r, n_bytes) (sgx_read_rand((unsigned char *) r, n_bytes) )
+#else
+# include <stdlib.h> //Need this for rand
+# include <assert.h>
+inline void rand_bytes(unsigned char * r, size_t n_bytes){
+  assert(r);
+  for(size_t i = 0; i < n_bytes; i++){
+    r[i] = (unsigned char) rand();
+  }
+  /*
+  for(int i = 0; i < n; i++){
+    r[i] = 0;
+    for(unsigned int j = 0; j < sizeof(int)*CHAR_BIT; j++){
+      r[i] |= (int)((1 & rand()) << j);
+    }
+  }
+  */
+  return;
+}
+#endif
+
 
 //0 is height, 1 is width
 int frievald(float * a, float * b, float * c, 
