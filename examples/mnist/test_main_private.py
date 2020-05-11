@@ -13,6 +13,7 @@ torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(0)
+torch.set_default_dtype(torch.float32)
 
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -23,7 +24,7 @@ hidden_size = 500
 num_classes = 10
 num_epochs = 10
 batch_size = 128
-learning_rate = .01
+learning_rate = .1
 
 # MNIST dataset 
 train_dataset = torchvision.datasets.MNIST(root='../../data', 
@@ -50,10 +51,10 @@ class NeuralNet(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(NeuralNet, self).__init__()
         #self.enclave = LinearAlt()
-        self.conv1 = ConvAlt(1, 32, 3, 1, bias = None)
-        self.conv2 = ConvAlt(32, 64, 3, 1, bias = None)
-        self.conv3 = ConvAlt(64, 128, 3, 1, bias = None)
-        self.fc1 = LinearAlt(61952, hidden_size, bias = None) 
+        # self.conv1 = ConvAlt(1, 32, 3, 1, bias = None)
+        # self.conv2 = ConvAlt(32, 64, 3, 1, bias = None)
+        # self.conv3 = ConvAlt(64, 128, 3, 1, bias = None)
+        self.fc1 = LinearAlt(784, hidden_size, bias = None) 
         # self.tanh = nn.Tanh()
         self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
         # # self.tanh = nn.Tanh()
@@ -71,15 +72,15 @@ class NeuralNet(nn.Module):
     def forward(self, x):
         
         #out = self.enclave(out)
-        out = self.conv1(x)
-        out = self.conv2(out)
-        out = self.conv3(out)
-        out = self.flat(out)
+        # out = self.conv1(x)
+        # out = self.conv2(out)
+        # out = self.conv3(out)
+        out = self.flat(x)
         out = self.fc1(out)
         # out = self.tanh(out)
         #For testing... will move later
         # #out = self.enclave(out, self.fc1.weight)
-        # out = self.fc2(out)
+        out = self.fc2(out)
         # out = self.tanh(out)
         # out = self.fc3(out)
         # # out = self.tanh(out)
@@ -107,7 +108,7 @@ for epoch in range(num_epochs):
         images = images.reshape(-1, 28,28, 1).to(device)
         labels = labels.to(device)
         
-        images += 1
+        # images += 1
         
         #for k in images:
         #    k = torch.add(k, rand_mask)
@@ -131,7 +132,7 @@ with torch.no_grad():
     for images, labels in test_loader:
         images = images.reshape(-1, 28,28, 1).to(device)
         labels = labels.to(device)
-        outputs = model(images + 1)
+        outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()

@@ -9,6 +9,8 @@ from PyTorchIPC import LinearAlt, ConvAlt, LinearAltLast
 from optimizer import SGD, MyLoss
 import sys
 
+from torch.optim.lr_scheduler import StepLR
+
 #Force Determinism
 torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
@@ -22,7 +24,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 1024
 num_classes = 10
-num_epochs = 1
+num_epochs = 200
 batch_size = 128
 learning_rate = [.1,.05,.01,.005,.001][int(sys.argv[1]) - 1]
 
@@ -51,15 +53,15 @@ class NeuralNet(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes):
         super(NeuralNet, self).__init__()
         #self.enclave = LinearAlt()
-        self.conv1 = ConvAlt(3, 128, 3, 1, bias = None)
-        self.conv2 = ConvAlt(128, 128, 3, 1, bias = None)
-        self.pool1 = nn.MaxPool2d(2)
+        self.conv1 = ConvAlt(3, 128, 3, 1, 1, bias = None)
+        self.conv2 = ConvAlt(128, 128, 3, 2, 1, bias = None)
+        # self.pool1 = nn.MaxPool2d(2)
         self.conv3 = ConvAlt(128, 256, 3, 1, bias = None)
-        self.conv4 = ConvAlt(256, 256, 3, 1, bias = None)
-        self.pool2 = nn.MaxPool2d(2)
+        self.conv4 = ConvAlt(256, 256, 3, 2, 1, bias = None)
+        # self.pool2 = nn.MaxPool2d(2)
         self.conv5 = ConvAlt(256, 512, 3, 1, bias = None)
-        self.conv6 = ConvAlt(512, 512, 3, 1, bias = None)
-        self.pool3 = nn.MaxPool2d(2)
+        self.conv6 = ConvAlt(512, 512, 3, 2, 1, bias = None)
+        # self.pool3 = nn.MaxPool2d(2)
         self.fc1 = LinearAlt(512*4*4, hidden_size, bias = None) 
         # self.tanh = nn.Tanh()
         # self.fc2 = LinearAlt(hidden_size, hidden_size, bias = None)  
@@ -80,13 +82,14 @@ class NeuralNet(nn.Module):
         #out = self.enclave(out)
         out = self.conv1(x)
         out = self.conv2(out)
-        out = self.pool1(out)
+        # out = self.pool1(out)
         out = self.conv3(out)
         out = self.conv4(out)
-        out = self.pool2(out)
+        # out = self.pool2(out)
         out = self.conv5(out)
         out = self.conv6(out)
-        out = self.pool3(out)
+        # print(out.shape)
+        # out = self.pool3(out)
         out = self.flat(out)
         out = self.fc1(out)
         # out = self.tanh(out)
@@ -111,13 +114,14 @@ model = NeuralNet(input_size, hidden_size, num_classes).to(device)
 # Loss and optimizer
 criterion = MyLoss()
 optimizer = SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
+scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 
 # Train the model
 total_step = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):  
         # Move tensors to the configured device
-        images = images.reshape(-1, 3, 32,32).to(device)
+        images = images.reshape(-1, 32,32, 3).to(device)
         labels = labels.to(device)
         
         images += 1
@@ -135,6 +139,7 @@ for epoch in range(num_epochs):
         if (i+1) % 100 == 0:
             print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
                     .format(epoch+1, num_epochs, i+1, total_step, loss.item()))
+    scheduler.step()
 
 # Test the model
 # In test phase, we don't need to compute gradients (for memory efficiency)
@@ -142,7 +147,7 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.reshape(-1, 3, 32,32).to(device)
+        images = images.reshape(-1, 32,32, 3).to(device)
         labels = labels.to(device)
         outputs = model(images + 1)
         _, predicted = torch.max(outputs.data, 1)

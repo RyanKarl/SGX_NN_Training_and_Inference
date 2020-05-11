@@ -1,4 +1,4 @@
-from torch.autograd import Function
+from torch.autograd import Function, Variable
 import torch.nn as nn
 import torch
 import numpy as np
@@ -6,8 +6,10 @@ import torch
 import torch.nn.functional as F
 from SPController import SPController
 import time
-
 input_ = input
+
+torch.set_default_dtype(torch.float32)
+super_mega_mask = torch.rand(10000,10000, device = "cuda:0") * 1
 
 def my_cross_entropy(x, y):
     #x = x - 1
@@ -33,9 +35,8 @@ def softmax_der(s):
 
 
 def SGXFL(input, weight):
-    rand_mask = torch.ones(input.shape, device = "cuda:0")
-
-    weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
+    rand_mask = super_mega_mask[0:input.shape[0], 0:input.shape[1]]
+    weight_rand_mask = super_mega_mask[0:weight.shape[0], 0:weight.shape[1]]
 
     # print(input.shape)
 
@@ -58,8 +59,8 @@ def SGXFL(input, weight):
 def SGXBL(grad_output, input, weight):
     
     # print(grad_output.shape)
-    rand_mask = torch.ones(input.shape, device = "cuda:0")
-    weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
+    rand_mask = super_mega_mask[0:input.shape[0], 0:input.shape[1]]
+    weight_rand_mask = super_mega_mask[0:weight.shape[0], 0:weight.shape[1]]
     grad_rand_mask = torch.ones(grad_output.shape, device = "cuda:0")
 
     a = input - rand_mask
@@ -89,7 +90,7 @@ def SGXBL(grad_output, input, weight):
     rand_mask = torch.ones(d.shape, device = "cuda:0")
     weight_rand_mask = torch.ones(e.shape, device = "cuda:0")
 
-    return d, e + weight_rand_mask
+    return d + super_mega_mask[0:d.shape[0], 0:d.shape[1]], e + weight_rand_mask
 
 class MyFunction3(Function):
     # Note that both forward and backward are @staticmethods
@@ -103,7 +104,6 @@ class MyFunction3(Function):
         #pytorch does masked input @ masked weights
         #that is sent to sgx to check if modified output is correct after unmodifying it
         #remask output and send it back
-
 
         #saves masked input and masked weights for fast backwards gpu pass
         ctx.save_for_backward(input, weight, bias)
@@ -185,7 +185,7 @@ class LinearAltLast(nn.Module):
             self.register_parameter('bias', None)
 
         self.weight.data.uniform_(-0.1, 0.1)
-        self.weight.data.add_(1, 1)
+        self.weight.data += super_mega_mask[0:self.weight.shape[0], 0:self.weight.shape[1]].to("cpu")
         if bias is not None:
             self.bias.data.uniform_(-0.1, 0.1)
 
@@ -196,24 +196,40 @@ class LinearAltLast(nn.Module):
 
 
 def SGXF(input, weight):
-    rand_mask = torch.ones(input.shape, device = "cuda:0")
+    rand_mask = super_mega_mask[0:input.shape[0], 0:input.shape[1]]
+    
 
-    weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
+    weight_rand_mask = super_mega_mask[0:weight.shape[0], 0:weight.shape[1]]
+
+
 
     # print(input.shape)
 
-    a = input - rand_mask
-    b = weight - weight_rand_mask
+    #128,784
+    a = input #- rand_mask
+
+    #500,784
+    b = weight #- weight_rand_mask
 
     # print(a.shape,b.shape)
     c = a @ b.t()
     # print(c)
 
-    rand_mask = torch.ones(c.shape, device = "cuda:0")
-    try:
-        out = (torch.relu(c) + rand_mask)
-    except:
-        out = (torch.relu(c) + rand_mask)
+    #128, 500
+    diff = rand_mask @ b.t()
+
+    #128, 500
+    diff2 = a @ weight_rand_mask.t()
+
+    diff3 = rand_mask @ weight_rand_mask.t()
+    
+    # print((a - rand_mask) @ (b - weight_rand_mask).t())
+    # print((c - diff - diff2 + diff3) - ((a - rand_mask) @ (b - weight_rand_mask).t()) )
+
+    rand_mask = super_mega_mask[0:c.shape[0], 0:c.shape[1]]
+    out = (torch.tanh(c - diff - diff2 + diff3) + rand_mask)
+
+    
 
     try:
         return out
@@ -221,28 +237,41 @@ def SGXF(input, weight):
         return out
 
 
-def SGXB(grad_output, input, weight):
+def SGXB(grad_output, input, weight, output):
     
     # print(grad_output.shape)
-    rand_mask = torch.ones(input.shape, device = "cuda:0")
-    weight_rand_mask = torch.ones(weight.shape, device = "cuda:0")
-    grad_rand_mask = torch.ones(grad_output.shape, device = "cuda:0")
+    rand_mask = super_mega_mask[0:input.shape[0], 0:input.shape[1]]
+    weight_rand_mask = super_mega_mask[0:weight.shape[0], 0:weight.shape[1]]
+    
 
-    a = input - rand_mask
-    b = weight - weight_rand_mask
-    
-    
-    try:
-        c = grad_output.clone() # - grad_rand_mask
-        # input_()
-    except:
-        c = grad_output.clone()
+
+    #128,784
+    a = input #- rand_mask
+
+    #500,784
+    b = weight #- weight_rand_mask
+
+
 
     
+    
+    c = grad_output.clone() #- 1
+
+    grad_rand_mask = super_mega_mask[0:c.shape[0], 0:c.shape[1]]
 
     # print(c.shape, a.shape, b.shape)
 
-    # c = c * (1-torch.tanh(a @ b.t())**2)
+    #tanh(c) + mask
+    g = output.clone()
+
+
+    f = a @ b.t()
+    diff = rand_mask @ b.t()
+    diff2 = a @ weight_rand_mask.t()
+    diff3 = rand_mask @ weight_rand_mask.t()
+    #128,500
+    c = c * (1-torch.tanh(g  - diff - diff2 + diff3)**2)
+
     # c = c * (torch.sigmoid(a @ b.t()) * (1 - torch.sigmoid(a @ b.t())))
 
     # ahh = (torch.relu(a @ b.t()) / (a @ b.t())) * 0
@@ -250,23 +279,32 @@ def SGXB(grad_output, input, weight):
     # ahh[torch.isnan(ahh)] = 0
 
     # c *= ahh
-
-    c[(a @ b.t()) <= 0] = 0
+    # try:
+    #     c[(a @ b.t()) <= 0] = 0
+    # except:
+    #     c[(a @ b.t()) <= 0] = 0
     # a = 1-torch.tanh(a)**2
 
+
+    #128, 500 x 500, 784
     d = c @ b
 
-    # print(d)
+    diffa = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2) @ b
+    diffb = c @ weight_rand_mask
 
+    diffc = (1-torch.tanh(grad_rand_mask- diff - diff2 + diff3)**2) @ weight_rand_mask
 
-    try:
-        e = c.t().mm(a)
-    except:
-        ax,bx,cx,dx = c.shape
-        ay,by,cy,dy = a.shape
-        # print(a.shape, c.shape)
-        e = c.reshape(dx,ax*bx*cx).mm(a.reshape(ay*by*cy,dy))
+    d = d - diffa - diffb + diffc
 
+    #500, 128 x 128, 784
+    e = c.t().mm(a)
+
+    diffa = c.t() @ rand_mask
+    diffb = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ a 
+
+    diffc = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ rand_mask
+
+    e = e - diffa - diffb + diffc    
 
     
     # print(e)
@@ -274,7 +312,7 @@ def SGXB(grad_output, input, weight):
     rand_mask = torch.ones(d.shape, device = "cuda:0")
     weight_rand_mask = torch.ones(e.shape, device = "cuda:0")
 
-    return d, e + weight_rand_mask 
+    return d + super_mega_mask[0:d.shape[0], 0:d.shape[1]], e + weight_rand_mask 
 
 class MyFunction2(Function):
     # Note that both forward and backward are @staticmethods
@@ -288,10 +326,11 @@ class MyFunction2(Function):
         #pytorch does masked input @ masked weights
         #that is sent to sgx to check if modified output is correct after unmodifying it
         #remask output and send it back
-
+        if input.shape[1] == 784:
+            a = input + super_mega_mask[0:input.shape[0], 0:input.shape[1]]
 
         #saves masked input and masked weights for fast backwards gpu pass
-        ctx.save_for_backward(input, weight, bias)
+        
         
         # rand_mask = torch.ones(input.shape)
 
@@ -305,8 +344,9 @@ class MyFunction2(Function):
 
         # masked_ouput = masked_input @ masked_weights
         # decrypted_output = maksed_output - random_matrix @ true_weights + (not so) extreme foiling
-
         output = SGXF(input, weight)
+
+        ctx.save_for_backward(input, weight, bias, output)
 
         #lalala sgx stuff
         # input = input.detach().numpy()
@@ -330,7 +370,7 @@ class MyFunction2(Function):
     @staticmethod
     def backward(ctx, grad_output):
 
-        input, weight, bias = ctx.saved_tensors
+        input, weight, bias, output = ctx.saved_tensors
         grad_input = grad_weight = grad_bias = None
 
         
@@ -345,8 +385,8 @@ class MyFunction2(Function):
         #     grad_weight = grad_output.t().mm(input)
         # if bias is not None and ctx.needs_input_grad[2]:
         #     grad_bias = grad_output.sum(0)
-        a,b = SGXB(grad_output, input, weight)
-        return a, b, grad_bias, None 
+        a,b = SGXB(grad_output, input, weight, output)
+        return a, b, grad_bias, None
 
 
 
@@ -370,7 +410,7 @@ class LinearAlt(nn.Module):
             self.register_parameter('bias', None)
 
         self.weight.data.uniform_(-0.1, 0.1)
-        self.weight.data.add_(1, 1)
+        self.weight.data += super_mega_mask[0:self.weight.shape[0], 0:self.weight.shape[1]].to("cpu")
         if bias is not None:
             self.bias.data.uniform_(-0.1, 0.1)
 
@@ -402,7 +442,8 @@ class ConvAlt(nn.Module):
             self.register_parameter('bias', None)
 
         self.weight.data.uniform_(-0.1, 0.1)
-        self.weight.data.add_(1, 1)
+        self.weight.data += super_mega_mask[0:self.weight.shape[0], 0:self.weight.shape[1]]
+    
         if bias is not None:
             self.bias.data.uniform_(-0.1, 0.1)
 
@@ -411,6 +452,7 @@ class ConvAlt(nn.Module):
         # See the autograd section for explanation of what happens here.
         # print(input.shape)
         patches = extract_image_patches(input, self.kernel, self.stride)
+        
         # print(patches.size())
         return MyFunction2.apply(patches, self.weight, self.bias, self.spc)
 
@@ -421,11 +463,13 @@ def extract_image_patches(x, kernel, stride=1, dilation=1):
     w2 = np.ceil(w / stride).astype(int)
     pad_row = (h2 - 1) * stride + (kernel - 1) * dilation + 1 - h
     pad_col = (w2 - 1) * stride + (kernel - 1) * dilation + 1 - w
-    # x = F.pad(x, (pad_row//2, pad_row - pad_row//2, pad_col//2, pad_col - pad_col//2))
-    
+    xp = F.pad(x, (0,0,pad_row//2, pad_row - pad_row//2, pad_col//2, pad_col - pad_col//2), "constant", 1)
+
+    # print(stride)
     # Extract patches
-    patches = x.unfold(1, kernel, stride).unfold(2, kernel, stride)
+    patches = xp.unfold(1, kernel, stride).unfold(2, kernel, stride)
     # print(patches.shape)
-    patches = patches.permute(0,3,4,5,1,2).contiguous()
+    patches = patches.permute(0,1,2,5,3,4).contiguous()
+    # print(patches.shape)
     
-    return patches.view(b,patches.shape[-2], patches.shape[-1], -1)
+    return patches.reshape(b,h//stride, w//stride, -1)
