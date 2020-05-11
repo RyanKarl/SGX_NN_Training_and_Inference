@@ -19,7 +19,7 @@ import os
 
 #Loading the data
 train = pd.read_csv("./mnist-in-csv/mnist_train.csv")
-train = train.head()
+#train = train.head()
 X = train.loc[:,train.columns != "label"].values/255   #Normalizing the values
 Y = train.label.values
 
@@ -32,10 +32,10 @@ Y_train = torch.from_numpy(targets_train).type(torch.LongTensor)
 Y_test = torch.from_numpy(targets_test).type(torch.LongTensor)
 
 train = torch.utils.data.TensorDataset(X_train,Y_train)
-test = torch.utils.data.TensorDataset(X_test,Y_test)
+tester = torch.utils.data.TensorDataset(X_test,Y_test)
 
 train_loader = torch.utils.data.DataLoader(train, batch_size = 100, shuffle = False)
-test_loader = torch.utils.data.DataLoader(test, batch_size = 100, shuffle = False)
+test_loader = torch.utils.data.DataLoader(tester, batch_size = 100, shuffle = False)
 
 class Net(nn.Module):
     def __init__(self):
@@ -79,6 +79,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
 
 
 def test(args, model, device, test_loader):
+    model.float()
     model.eval()
     test_loss = 0
     correct = 0
@@ -96,6 +97,7 @@ def test(args, model, device, test_loader):
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
+    model.double()
 
 def main():
     # Training settings
@@ -134,12 +136,12 @@ def main():
     #                       transforms.Normalize((0.1307,), (0.3081,))
     #                   ])),
     #    batch_size=args.batch_size, shuffle=True, **kwargs)
-    #test_loader = torch.utils.data.DataLoader(
-    #    datasets.MNIST('../data', train=False, transform=transforms.Compose([
-    #                       transforms.ToTensor(),
-    #                       transforms.Normalize((0.1307,), (0.3081,))
-    #                   ])),
-    #    batch_size=args.test_batch_size, shuffle=True, **kwargs)
+    test_loader1 = torch.utils.data.DataLoader(
+        datasets.MNIST('../data', train=False, transform=transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ])),
+        batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
     model = Net().to(device)
 
@@ -153,8 +155,8 @@ def main():
     #ischeduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 
     #for epoch in range(1, args.epochs + 1):
-    epochs = 5
-    for epoch in range(epochs):
+    #epochs = 15
+    for epoch in range(1, args.epochs + 1):
 
         running_loss = 0
         for images,labels in train_loader:
@@ -177,10 +179,10 @@ def main():
                 model.eval()
                 for images,labels in test_loader:
 
-                    test = Variable(images.view(-1,1,28,28))
+                    tester = Variable(images.view(-1,1,28,28))
                     labels = Variable(labels)
 
-                    log_ps = model(test)
+                    log_ps = model(tester)
                     test_loss += criterion(log_ps,labels)
 
                     ps = torch.exp(log_ps)
@@ -191,10 +193,16 @@ def main():
             train_losses.append(running_loss/len(train_loader))
             test_losses.append(test_loss/len(test_loader))
 
-            print("Epoch: {}/{}.. ".format(epoch+1, epochs),
-              "Training Loss: {:.3f}.. ".format(running_loss/len(train_loader)),
-              "Test Loss: {:.3f}.. ".format(test_loss/len(test_loader)),
-              "Test Accuracy: {:.3f}".format(accuracy/len(test_loader)))
+            #print(args)
+            #print(model)
+            #print(device)
+            #print(test_loader)
+            test(args, model, device, test_loader1)
+
+            #print("Epoch: {}/{}.. ".format(epoch+1, epochs),
+            #  "Training Loss: {:.3f}.. ".format(running_loss/len(train_loader)),
+            #  "Test Loss: {:.3f}.. ".format(test_loss/len(test_loader)),
+            #  "Test Accuracy: {:.3f}".format(accuracy/len(test_loader)))
 
         #train(args, model, device, train_loader, optimizer, epoch)
         #test(args, model, device, test_loader)
@@ -204,13 +212,16 @@ def main():
     plt.plot(test_losses, label='Validation loss')
     plt.legend(frameon=False)
 
-    #test_loader = torch.utils.data.DataLoader(
-    #    datasets.MNIST('../data', train=False, transform=transforms.Compose([
-    #                    transforms.ToTensor(),
-    #                    transforms.Normalize((0.1307,), (0.3081,))
-    #               ])),
-    #    batch_size=args.test_batch_size, shuffle=True, **kwargs)
+    '''
+    test_loader1 = torch.utils.data.DataLoader(
+        datasets.MNIST('../data', train=False, transform=transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize((0.1307,), (0.3081,))
+                   ])),
+        batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
+    test(args, model, device, test_loader1)
+    '''
 
     if args.save_model:
         torch.save(model.state_dict(), "mnist_cnn.pt")
