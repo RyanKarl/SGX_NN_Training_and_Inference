@@ -24,7 +24,7 @@ hidden_size = 500
 num_classes = 10
 num_epochs = 10
 batch_size = 128
-learning_rate = .1
+learning_rate = 1
 
 # MNIST dataset 
 train_dataset = torchvision.datasets.MNIST(root='../../data', 
@@ -82,9 +82,9 @@ class NeuralNet(nn.Module):
         # #out = self.enclave(out, self.fc1.weight)
         out = self.fc2(out)
         # out = self.tanh(out)
-        # out = self.fc3(out)
+        out = self.fc3(out)
         # # out = self.tanh(out)
-        # out = self.fc4(out)
+        out = self.fc4(out)
         # out = self.tanh(out)
         out = self.fc5(out)
         # out = self.sm(out)

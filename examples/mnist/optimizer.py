@@ -1,6 +1,9 @@
 import torch
 from torch.optim.optimizer import Optimizer, required
 from torch.autograd import Variable
+import pickle
+super_mega_mask = pickle.load(open("mask.p", 'rb')).to("cuda:0") 
+
 
 class MyLoss(torch.nn.CrossEntropyLoss):
     def __init__(self, weight=None, size_average=None, ignore_index=-100,
@@ -146,11 +149,13 @@ class SGD(Optimizer):
 
 
 def sec_update(data, d_p, lr):
-    data.add_(-1, 1)
+
+    mask = super_mega_mask[0:data.shape[0], 0:data.shape[1]]
+    data.add_(-mask)
     # print(d_p)
-    f = d_p - 1
+    f = d_p - super_mega_mask[0:d_p.shape[0], 0:d_p.shape[1]]
     
 
     data.add_(-lr, f)
-    data.add_(1, 1)
+    data.add_(mask)
 

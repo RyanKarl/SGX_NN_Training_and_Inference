@@ -6,10 +6,11 @@ import torch
 import torch.nn.functional as F
 from SPController import SPController
 import time
+import pickle
 input_ = input
 
 torch.set_default_dtype(torch.float32)
-super_mega_mask = torch.rand(10000,10000, device = "cuda:0") * 1
+super_mega_mask = pickle.load(open("mask.p", 'rb')).to("cuda:0") #torch.rand(10000,10000, device = "cuda:0") * 1
 
 def my_cross_entropy(x, y):
     #x = x - 1
@@ -61,7 +62,6 @@ def SGXBL(grad_output, input, weight):
     # print(grad_output.shape)
     rand_mask = super_mega_mask[0:input.shape[0], 0:input.shape[1]]
     weight_rand_mask = super_mega_mask[0:weight.shape[0], 0:weight.shape[1]]
-    grad_rand_mask = torch.ones(grad_output.shape, device = "cuda:0")
 
     a = input - rand_mask
     b = weight - weight_rand_mask
@@ -87,8 +87,7 @@ def SGXBL(grad_output, input, weight):
     e = c.t().mm(a)
     # print(e)
 
-    rand_mask = torch.ones(d.shape, device = "cuda:0")
-    weight_rand_mask = torch.ones(e.shape, device = "cuda:0")
+    weight_rand_mask = super_mega_mask[0:e.shape[0], 0:e.shape[1]]
 
     return d + super_mega_mask[0:d.shape[0], 0:d.shape[1]], e + weight_rand_mask
 
@@ -222,6 +221,8 @@ def SGXF(input, weight):
     diff2 = a @ weight_rand_mask.t()
 
     diff3 = rand_mask @ weight_rand_mask.t()
+
+    # print((c - diff - diff2 + diff3) - ((a - rand_mask) @ (b - weight_rand_mask).t()))
     
     # print((a - rand_mask) @ (b - weight_rand_mask).t())
     # print((c - diff - diff2 + diff3) - ((a - rand_mask) @ (b - weight_rand_mask).t()) )
@@ -271,6 +272,7 @@ def SGXB(grad_output, input, weight, output):
     diff3 = rand_mask @ weight_rand_mask.t()
     #128,500
     c = c * (1-torch.tanh(g  - diff - diff2 + diff3)**2)
+    
 
     # c = c * (torch.sigmoid(a @ b.t()) * (1 - torch.sigmoid(a @ b.t())))
 
@@ -280,7 +282,7 @@ def SGXB(grad_output, input, weight, output):
 
     # c *= ahh
     # try:
-    #     c[(a @ b.t()) <= 0] = 0
+    # c[(g  - diff - diff2 + diff) <= 0] = 0
     # except:
     #     c[(a @ b.t()) <= 0] = 0
     # a = 1-torch.tanh(a)**2
@@ -296,6 +298,11 @@ def SGXB(grad_output, input, weight, output):
 
     d = d - diffa - diffb + diffc
 
+    ct = grad_output.clone() - grad_rand_mask
+    ct = ct * (1-torch.tanh(g  - diff - diff2 + diff3)**2)
+
+    # print((d) - (ct @ b))
+
     #500, 128 x 128, 784
     e = c.t().mm(a)
 
@@ -306,11 +313,13 @@ def SGXB(grad_output, input, weight, output):
 
     e = e - diffa - diffb + diffc    
 
+    # print((e) - (ct.t() @ a))
+
     
     # print(e)
 
     rand_mask = torch.ones(d.shape, device = "cuda:0")
-    weight_rand_mask = torch.ones(e.shape, device = "cuda:0")
+    weight_rand_mask = super_mega_mask[0:e.shape[0], 0:e.shape[1]]
 
     return d + super_mega_mask[0:d.shape[0], 0:d.shape[1]], e + weight_rand_mask 
 
