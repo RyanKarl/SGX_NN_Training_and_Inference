@@ -48,7 +48,7 @@ inline void rand_bytes(unsigned char * r, size_t n_bytes){
 }
 #endif
 
-
+//TODO change index macro to take width
 //0 is height, 1 is width
 int frievald(float * a, float * b, float * c, 
   int a_height, int a_width, int b_height, int b_width, int c_height, int c_width)
@@ -78,13 +78,13 @@ int frievald(float * a, float * b, float * c,
   }
   for (int i = 0; i < b_height; i++){
       for (int j = 0; j < b_width; j++){
-          br[i] += INDEX_FLOATMAT(b, i, j, b_height) * ((unsigned char)INDEX_BITARR(r, j));
+          br[i] += INDEX_FLOATMAT(b, i, j, b_width) * ((unsigned char)INDEX_BITARR(r, j));
       }
   }
 
   for (int i = 0; i < c_height; i++){
       for (int j = 0; j < c_width; j++){
-          cr[i] += INDEX_FLOATMAT(c, i, j, c_height) * ((unsigned char)INDEX_BITARR(r, j));
+          cr[i] += INDEX_FLOATMAT(c, i, j, c_width) * ((unsigned char)INDEX_BITARR(r, j));
       }
   }
 
@@ -98,7 +98,7 @@ int frievald(float * a, float * b, float * c,
   assert(axbr && "Allocating axbr failed!");
   for (int i = 0; i < b_height; i++){
       for (int j = 0; j < b_width; j++){
-          axbr[i] += INDEX_FLOATMAT(a, i, j, b_height) * br[j];
+          axbr[i] += INDEX_FLOATMAT(a, i, j, b_width) * br[j];
       }
   }
 
@@ -161,10 +161,7 @@ int activate(float * data, int height, int width){
   return 0;
 }
 
-//TODO complete this
-void unmask(float * data, int width, int height, float * mask_data, float * input_layer){
-  return;
-}
+
 
 int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width,
  float * data_out, int out_height, int out_width){
@@ -323,6 +320,11 @@ int mask(float * input, float * masks, unsigned int input_size){
   return 0;
 }
 
+//TODO complete this
+void unmask(float * data, int width, int height, float * mask_data, float * input_layer){
+  return;
+}
+
 
 #ifdef NENCLAVE
 //Assumes comma-delimited
@@ -390,6 +392,32 @@ void mask(float * data, int len, float * mask_data, bool do_mask=true){
   }
   for(int i = 0; i < len; i++){
     data[i] += mask_data[i];
+  }
+  return;
+}
+
+void matrix_multiply(float * a, int a_width, int a_height, float * b, int b_width, int b_height, float ** c, int * c_width, int * c_height){
+  assert(a_width == b_height);
+  assert(a_height > 0);
+  assert(a_width > 0);
+  assert(b_height > 0);
+  assert(b_width > 0);
+
+  *c_width = b_width;
+  *c_height = a_height;
+  *c = (float *) malloc(sizeof(float)*(*c_width)*(*c_height));
+
+  for(int i = 0; i < a_height; i++){
+    //printf("i %d\n", i);
+    for(int j = 0; j < b_width; j++){
+      //printf("\tj %d\n", j);
+      INDEX_FLOATMAT((*c), i, j, (*c_width)) = 0.0f;
+      for(int k = 0; k < a_width; k++){
+        //printf("\t\tk %d\n", k);
+        //printf("\t\t a %f b %f\n", INDEX_FLOATMAT(a, i, k, a_width), INDEX_FLOATMAT(b, k, j, b_width));
+        INDEX_FLOATMAT((*c), i, j, (*c_width)) += INDEX_FLOATMAT(a, i, k, a_width)*INDEX_FLOATMAT(b, k, j, b_width);
+      }
+    }
   }
   return;
 }
@@ -661,6 +689,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
       
       //TODO backpropagation
+      //TODO write layers back out
       
       //Setup things for the next iteration
       if(layer_idx){
