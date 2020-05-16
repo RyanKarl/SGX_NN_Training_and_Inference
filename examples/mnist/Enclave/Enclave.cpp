@@ -396,7 +396,24 @@ void mask(float * data, int len, float * mask_data, bool do_mask=true){
   return;
 }
 
-void matrix_multiply(float * a, int a_width, int a_height, float * b, int b_width, int b_height, float ** c, int * c_width, int * c_height){
+
+
+void matrix_add(float * a, float * b, int elts, float * result){
+  for(int i = 0; i < elts; i++){
+    result[i] = a[i] + b[i];
+  }
+}
+
+void matrix_sub(float * a, float * b, int elts, float * result){
+  for(int i = 0; i < elts; i++){
+    result[i] = a[i] - b[i];
+  }
+}
+
+//Allocates memory
+void matrix_multiply(float * a, int a_width, int a_height,
+    float * b, int b_width, int b_height, 
+    float ** c, int * c_width, int * c_height, int negate){
   assert(a_width == b_height);
   assert(a_height > 0);
   assert(a_width > 0);
@@ -406,23 +423,62 @@ void matrix_multiply(float * a, int a_width, int a_height, float * b, int b_widt
   *c_width = b_width;
   *c_height = a_height;
   *c = (float *) malloc(sizeof(float)*(*c_width)*(*c_height));
-
-  for(int i = 0; i < a_height; i++){
-    //printf("i %d\n", i);
-    for(int j = 0; j < b_width; j++){
-      //printf("\tj %d\n", j);
-      INDEX_FLOATMAT((*c), i, j, (*c_width)) = 0.0f;
-      for(int k = 0; k < a_width; k++){
-        //printf("\t\tk %d\n", k);
-        //printf("\t\t a %f b %f\n", INDEX_FLOATMAT(a, i, k, a_width), INDEX_FLOATMAT(b, k, j, b_width));
-        INDEX_FLOATMAT((*c), i, j, (*c_width)) += INDEX_FLOATMAT(a, i, k, a_width)*INDEX_FLOATMAT(b, k, j, b_width);
+  
+  if(!negate){
+    for(int i = 0; i < a_height; i++){
+      //printf("i %d\n", i);
+      for(int j = 0; j < b_width; j++){
+        //printf("\tj %d\n", j);
+        INDEX_FLOATMAT((*c), i, j, (*c_width)) = 0.0f;
+        for(int k = 0; k < a_width; k++){
+          //printf("\t\tk %d\n", k);
+          //printf("\t\t a %f b %f\n", INDEX_FLOATMAT(a, i, k, a_width), INDEX_FLOATMAT(b, k, j, b_width));
+          INDEX_FLOATMAT((*c), i, j, (*c_width)) += INDEX_FLOATMAT(a, i, k, a_width)*INDEX_FLOATMAT(b, k, j, b_width);
+        }
       }
     }
   }
+  else{
+    for(int i = 0; i < a_height; i++){
+      //printf("i %d\n", i);
+      for(int j = 0; j < b_width; j++){
+        //printf("\tj %d\n", j);
+        INDEX_FLOATMAT((*c), i, j, (*c_width)) = 0.0f;
+        for(int k = 0; k < a_width; k++){
+          //printf("\t\tk %d\n", k);
+          //printf("\t\t a %f b %f\n", INDEX_FLOATMAT(a, i, k, a_width), INDEX_FLOATMAT(b, k, j, b_width));
+          INDEX_FLOATMAT((*c), i, j, (*c_width)) -= INDEX_FLOATMAT(a, i, k, a_width)*INDEX_FLOATMAT(b, k, j, b_width);
+        }
+      }
+    }
+  }
+  
   return;
 }
 
+void forward_demask(const float * input, const float * input_masks, 
+  const float * weights, const float * weights_masks, 
+  int height, int width, float ** result){
 
+  int total_elts = height*width;
+  float * tmp = (float *) malloc(sizeof(float)*height*width);
+  matrix_sub(weights, weights_masks, total_elts, tmp);
+
+  float * c_d2;
+  matrix_multiply(input, width, height, tmp, width, height, &c_d2, &w_dummy, &h_dummy, 0);
+
+  float * d3_d;
+  matrix_multiply(input_masks, width, height, tmp, width, height, &c_d2, &w_dummy, &h_dummy, 1);
+  
+  matrix_sub(c_d2, d3_d, total_elts, c_d2);
+  activate(c_d2, height, width);
+  matrix_add(c_d2, input_masks);
+
+  *result = c_d2;
+
+  free(tmp);
+  free(d3_d);
+}
 
 //Need OCALLS for pipe I/O, setup, teardown
 int enclave_main(char * network_structure_fname, char * input_csv_filename, 

@@ -226,6 +226,9 @@ def SGXF(input, weight):
     
     # print((a - rand_mask) @ (b - weight_rand_mask).t())
     # print((c - diff - diff2 + diff3) - ((a - rand_mask) @ (b - weight_rand_mask).t()) )
+    
+    # d3_d = rand_mask @ (weight_rand_mask.t() - b.t())
+    # c_d2 = a @ (b.t() - weight_rand_mask.t())
 
     rand_mask = super_mega_mask[0:c.shape[0], 0:c.shape[1]]
     out = (torch.tanh(c - diff - diff2 + diff3) + rand_mask)
