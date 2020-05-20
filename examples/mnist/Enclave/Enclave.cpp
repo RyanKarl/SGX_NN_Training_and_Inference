@@ -411,9 +411,9 @@ void matrix_sub(float * a, float * b, int elts, float * result){
 }
 
 //Allocates memory
-void matrix_multiply(float * a, int a_width, int a_height,
-    float * b, int b_width, int b_height, 
-    float ** c, int * c_width, int * c_height, int negate){
+void matrix_multiply(float * a, const int a_width, const int a_height,
+    float * b, const int b_width, const int b_height, 
+    float ** c, int * c_width, int * c_height, const int negate=0){
   assert(a_width == b_height);
   assert(a_height > 0);
   assert(a_width > 0);
@@ -456,9 +456,130 @@ void matrix_multiply(float * a, int a_width, int a_height,
   return;
 }
 
+void sub_from_ones(float * a, const int total_elts){
+  for(int i = 0; i < total_elts; i++){
+    a[i] = 1.0 - a[i];
+  }
+  return;
+}
+
+float * transform(const float * x, const float * term, const int width, const int height){
+  float * difference = (float *) malloc(sizeof(float) * width * height);
+  matrix_sub(x, term, width*height, difference);
+  activate(difference, width, height);
+  float * squared;
+  int p_w, p_h;
+  matrix_multiply(difference, width, height, difference, width, height, &squared, &p_w, &p_h, 0);
+  free(difference);
+  difference = NULL;
+  sub_from_ones(squared, width*height);
+  return squared;
+}
+
+float * transpose(const float * x, const int width, const int height){
+  float * ret = (float *) malloc(sizeof(float) * width * height);
+  for(int w_idx = 0; w_idx < width, w_idx++){
+    for(int h_idx = 0; h_idx < height; h_idx++){
+      INDEX_FLOATMAT(ret, h_idx, w_idx, height) = INDEX_FLOATMAT(x, w_idx, h_idx, width);
+    }
+  }
+  return ret;
+}
+
+
+void backwards_demask(const float * input, const int input_width, const int input_height,
+    const float * input_mask, const int input_mask_width, const int input_mask_height,
+    const float * outputs, const int outputs_width, const int outputs_height,
+    const float * weights, const int weights_width, const int weights_height,
+    const float * weights_mask, const int weights_mask_width, const int weights_mask_height,
+    const float * grad_output, const int grad_output_width, const int grad_output_height,
+    const float * grad_mask, const int grad_mask_width, const int grad_mask_height
+    float ** d_ret, float ** e_ret){
+  //Calculate weight_rand_mask - b
+  float * diff3_diff = (float *) malloc(sizeof(float) * input_mask_width * weights_height);
+  float * weights_transpose = transpose(weights, weights_width, weights_height);
+  float * weights_mask_transpose = transpose(weights_mask, weights_mask_width, weights_mask_height);
+  matrix_sub(weights_mask_transpose, weights_transpose, weights_width*weights_height, diff3_diff);
+  int diff_w, diff_h;
+  float * diff_tmp;
+  matrix_multiply(input_mask, weights_width, weights_height,
+   diff3_diff, input_mask_height, weights_width, //Swap width and height
+   diff_tmp, &diff_w, &diff_h, 0);
+
+  float * diff2;
+  matrix_multiply(input, input_width, input_height, 
+    weights_mask_transpose, weights_mask_height, weights_mask_width, //Swap height and weights here
+    diff2, &diff_w, &diff_h, 0);
+  matrix_sub(diff_tmp, diff2, diff_w * diff_h, diff_tmp);
+
+  free(weights_mask_transpose);
+  weights_mask_transpose = NULL;
+  free(weights_transpose);
+  weights_transpose = NULL;
+  free(diff2);
+  diff2 = NULL;
+  free(diff3_diff);
+  diff3_diff = NULL;
+
+  //diff_tmp now holds diff3-diff-diff2
+  float * grad_rand_mask_transformed = transform(grad_mask, diff_tmp, diff_w, diff_h);
+  float * weight_mask_weights = (float *) malloc(sizeof(float) * grad_output_width * weights_height);
+  matrix_sub(weights, weights_mask, grad_output_width * weights_height, weight_mask_weights);
+  int d_diffb_w, d_diffb_h;
+  float * d_diffb;
+  matrix_multiply(grad_output, grad_output_width, grad_output_height,
+    weight_mask_weights, grad_output_width, weights_height, 
+    d_diffb, d_diffb_w, d_diffb_h, 0);
+  int diffc_diffa_w, diffc_diffa_h;
+  float * diffc_diffa;
+  matrix_multiply(grad_rand_mask_transformed, diff_w, diff_h,
+    weight_mask_weights, grad_output_width, weights_height,
+    diffc_diffa, &diffc_diffa_w, &diffc_diffa_h, 1);
+  matrix_add(diffc_diffa, d_diffb, d_diffb_w * d_diffb_h, diffc_diffa);
+  free(d_diffb); //Don't free diffc_diffa
+
+  float * transformed_transpose = transpose(grad_rand_mask_transformed, diff_w, diff_h);
+  float * a_randmask = (float *) malloc(sizeof(float)*weights_height*input_width);
+  //float * difff_diffg = (float *) malloc(sizeof(float)*diff_h*input_width);
+  //a-rand_mask
+  matrix_sub(input, input_mask, input_width*input_height, a_randmask);
+  
+  float * e_diffe;
+  float * diffg_difff;
+  //transpose of c times (a-rand_mask)
+  int e_w, e_h;
+  float * grad_output_transpose = transpose(grad_output, grad_output_width, grad_output_height);
+  matrix_multiply(grad_output_transpose, grad_output_height, grad_output_width, //Switch width and height
+    a_randmask, input_width, input_height,
+    &e_diffe, &e_w, &e_h, 0);
+  matrix_multiply(transformed_transpose, diff_h, diff_w, //Switch width and height
+    a_randmask, input_width, input_height,
+    &diffg_difff, &e_w, &e_h, 1);
+  matrix_add(e_diffe, diffg_difff, e_w*e_h, e_diffe);
+
+  //TODO set to null
+  free(diff_tmp);
+  free(grad_output_transpose);
+  free(a_randmask);
+  free(difff_diffg);
+  free(weight_mask_weights);
+  free(diffg_difff);
+
+  free(transformed_transpose);
+  transformed_transpose = NULL;
+  free(grad_rand_mask_transformed);
+  grad_rand_mask_transformed = NULL;
+
+  *d_ret = diffc_diffa;
+  *e_ret = e_diffe;
+
+  return;
+
+}
+
 void forward_demask(const float * input, const float * input_masks, 
   const float * weights, const float * weights_masks, 
-  int height, int width, float ** result){
+  const int height, const int width, float ** result){
 
   int total_elts = height*width;
   float * tmp = (float *) malloc(sizeof(float)*height*width);
@@ -479,6 +600,8 @@ void forward_demask(const float * input, const float * input_masks,
   free(tmp);
   free(d3_d);
 }
+
+
 
 //Need OCALLS for pipe I/O, setup, teardown
 int enclave_main(char * network_structure_fname, char * input_csv_filename, 
