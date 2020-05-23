@@ -135,7 +135,6 @@ int file_to_string(char * fname, char * out, size_t str_buf_len){
 }
 
 //Assumes a buffer is allocated
-//This function should be an OCALL
 int read_weight_file(char * filename, size_t num_elements, float * buf){
   if(!num_elements){
     return 1;
@@ -153,5 +152,21 @@ int read_weight_file(char * filename, size_t num_elements, float * buf){
   }
   return 0;
 }
+
+//Assumes comma-delimited
+int read_weight_file_plain(char * filename, size_t bufsize, float * buf){
+  ifstream fs(filename);
+  int i;
+  char comma_holder;
+  for(i = 0; i < bufsize/sizeof(float); i++){
+    if(!fs.good()){
+      return 1;
+    }
+    fs >> buf[i] >> comma_holder;  
+  }
+  return 0;
+}
+
+
 
 #endif

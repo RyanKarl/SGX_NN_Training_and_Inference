@@ -60,6 +60,7 @@ enclave {
         int file_to_string([in, string] char * fname, [out, size=str_len] char * out, size_t str_buf_len);
         int read_weight_file([in, string] char * filename, size_t
 num_elements, [out, size=num_elements] float * buf);
+        int read_weight_file_plain([in, string] char * filename, size_t bufsize, [out, size=bufsize] float * buf)
     };
     
 
