@@ -12,7 +12,7 @@
 #include <vector>
 #include <string>
 
-
+#include "matrix.h"
 
 #ifdef NENCLAVE
 # include "Enclave.h"
@@ -59,53 +59,48 @@ int frievald(float * a, float * b, float * c,
   assert(c_height == a_height);
   assert(c_width == b_width);
   //Create a random vector r
-  size_t num_bytes_randarr = (b_width/CHAR_BIT) + (b_width%CHAR_BIT? 1 : 0);
-  unsigned char * r = (unsigned char *) calloc(num_bytes_randarr, sizeof(unsigned char));
-  if(!r){
-    assert(r && "calloc failed");
+  //TODO get less randomness
+  float * r = (float *) malloc(sizeof(float) * b_width);
+  for(int i = 0; i < b_width; i++){
+    unsigned char rand_byte;
+    rand_bytes(&rand_byte, 1);
+    r[i] = (float) (rand_byte & 1);
   }
-  rand_bytes(r, num_bytes_randarr);
 
   //Hope that calloc properly sets bits to 0
   //Calculate br, cr in the same loop
-  float * br = (float *) calloc(b_width, sizeof(float));
-  float * cr = (float *) calloc(c_width, sizeof(float));
-  if(!br){
-    assert(br && "malloc failed");
-  }
-  if(!cr){
-    assert(cr && "malloc failed");
-  }
-  for (int i = 0; i < b_height; i++){
-      for (int j = 0; j < b_width; j++){
-          br[i] += INDEX_FLOATMAT(b, i, j, b_width) * ((unsigned char)INDEX_BITARR(r, j));
-      }
-  }
+  float * br;
+  int br_w, br_h;
+  float * cr;
+  int cr_w, cr_h;
+  
+  matrix_multiply(b, b_width, b_height, 
+    r, 1, b_width,
+    &br, &br_w, &br_h, 0);
+  assert(br_h == a_width);
+  assert(br_w == 1);
 
-  for (int i = 0; i < c_height; i++){
-      for (int j = 0; j < c_width; j++){
-          cr[i] += INDEX_FLOATMAT(c, i, j, c_width) * ((unsigned char)INDEX_BITARR(r, j));
-      }
-  }
+  matrix_multiply(c, c_width, c_height,
+    r, 1, b_width,
+    &cr, &cr_w, &cr_h, 0);
+  assert(cr_h == b_width);
+  assert(cr_w == 1);
 
   free(r);
   r = NULL;
 
-  float * axbr = (float *) calloc(b_height, sizeof(float));
-  if(!axbr){
-    assert(axbr && "malloc failed");
-  }
+  float * axbr;
+  int axbr_w, axbr_h;
   assert(axbr && "Allocating axbr failed!");
-  for (int i = 0; i < b_height; i++){
-      for (int j = 0; j < b_width; j++){
-          axbr[i] += INDEX_FLOATMAT(a, i, j, b_width) * br[j];
-      }
-  }
+  matrix_multiply(a, a_width, a_height, 
+    br, br_w, br_h,
+    &axbr, &axbr_w, &axbr_h, 0);
 
   free(br);
   br = NULL;
 
   for (int i = 0; i < c_width; i++){
+    //cout << "axbr[" << i << "] " << axbr[i] << " cr[" << i << "] " << cr[i] << endl;
     if (FLOAT_CMP(axbr[i], cr[i])){
         free(axbr);
         free(cr);
@@ -151,15 +146,7 @@ int activate(float * data_in, int in_height, int in_width,
 }
 */
 
-int activate(float * data, int height, int width){
-  if(height <= 0 || width <= 0){
-    return 1;
-  }
-  for(int i = 0; i < height * width; i++){
-    data[i] = tanh(data[i]);
-  }
-  return 0;
-}
+
 
 
 
@@ -335,7 +322,7 @@ int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
     bufs[i] = (float *) malloc(layers[i].height * layers[i].width * sizeof(float));
     //Should check return val
     size_t len = layers[i].filename.size();
-    char * fname_buf = (char *) malloc(len+1);
+    char * fname_buf = (char *) calloc(len+1, sizeof(char));
     strncat(fname_buf, layers[i].filename.c_str(), len);
 #ifdef NENCLAVE
     if(read_weight_file_plain(fname_buf, layers[i].height * layers[i].width * sizeof(float), bufs[i])){
@@ -401,93 +388,6 @@ void mask(float * data, int len, float * mask_data, bool do_mask=true){
 
 
 
-void matrix_add(const float * a, const float * b, int elts, float * result){
-  for(int i = 0; i < elts; i++){
-    result[i] = a[i] + b[i];
-  }
-}
-
-void matrix_sub(const float * a, const float * b, int elts, float * result){
-  for(int i = 0; i < elts; i++){
-    result[i] = a[i] - b[i];
-  }
-}
-
-//Allocates memory
-void matrix_multiply(const float * a, const int a_width, const int a_height,
-    const float * b, const int b_width, const int b_height, 
-    float ** c, int * c_width, int * c_height, const int negate=0){
-  assert(a_width == b_height);
-  assert(a_height > 0);
-  assert(a_width > 0);
-  assert(b_height > 0);
-  assert(b_width > 0);
-
-  *c_width = b_width;
-  *c_height = a_height;
-  *c = (float *) malloc(sizeof(float)*(*c_width)*(*c_height));
-  
-  if(!negate){
-    for(int i = 0; i < a_height; i++){
-      //printf("i %d\n", i);
-      for(int j = 0; j < b_width; j++){
-        //printf("\tj %d\n", j);
-        INDEX_FLOATMAT((*c), i, j, (*c_width)) = 0.0f;
-        for(int k = 0; k < a_width; k++){
-          //printf("\t\tk %d\n", k);
-          //printf("\t\t a %f b %f\n", INDEX_FLOATMAT(a, i, k, a_width), INDEX_FLOATMAT(b, k, j, b_width));
-          INDEX_FLOATMAT((*c), i, j, (*c_width)) += INDEX_FLOATMAT(a, i, k, a_width)*INDEX_FLOATMAT(b, k, j, b_width);
-        }
-      }
-    }
-  }
-  else{
-    for(int i = 0; i < a_height; i++){
-      //printf("i %d\n", i);
-      for(int j = 0; j < b_width; j++){
-        //printf("\tj %d\n", j);
-        INDEX_FLOATMAT((*c), i, j, (*c_width)) = 0.0f;
-        for(int k = 0; k < a_width; k++){
-          //printf("\t\tk %d\n", k);
-          //printf("\t\t a %f b %f\n", INDEX_FLOATMAT(a, i, k, a_width), INDEX_FLOATMAT(b, k, j, b_width));
-          INDEX_FLOATMAT((*c), i, j, (*c_width)) -= INDEX_FLOATMAT(a, i, k, a_width)*INDEX_FLOATMAT(b, k, j, b_width);
-        }
-      }
-    }
-  }
-  
-  return;
-}
-
-void sub_from_ones(float * a, const int total_elts){
-  for(int i = 0; i < total_elts; i++){
-    a[i] = 1.0 - a[i];
-  }
-  return;
-}
-
-float * transform(const float * x, const float * term, const int width, const int height){
-  float * difference = (float *) malloc(sizeof(float) * width * height);
-  matrix_sub(x, term, width*height, difference);
-  activate(difference, width, height);
-  float * squared;
-  int p_w, p_h;
-  matrix_multiply(difference, width, height, difference, width, height, &squared, &p_w, &p_h, 0);
-  free(difference);
-  difference = NULL;
-  sub_from_ones(squared, width*height);
-  return squared;
-}
-
-float * transpose(const float * x, const int width, const int height){
-  float * ret = (float *) malloc(sizeof(float) * width * height);
-  for(int w_idx = 0; w_idx < width; w_idx++){
-    for(int h_idx = 0; h_idx < height; h_idx++){
-      INDEX_FLOATMAT(ret, h_idx, w_idx, height) = INDEX_FLOATMAT(x, w_idx, h_idx, width);
-    }
-  }
-  return ret;
-}
 
 
 void backwards_demask(const float * input, const int input_width, const int input_height,

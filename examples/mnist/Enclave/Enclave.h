@@ -19,7 +19,7 @@ int frievald(float * a, float * b, float * c,
 int verify_frievald(float * data, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width);
 
 //Return 1 if activation fails, 0 if successful
-int activate(float * data, int height, int width); //Reference or value?
+//int activate(float * data, int height, int width); //Reference or value?
 
 //Trust that data_in and data_out have the correct size
 //Buffers must be allocated outside the enclave!

@@ -119,7 +119,9 @@ class SPController:
     header = b''
     for dim in data_shape:
       header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER) 
-    packed_data = b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(mat, order='C')])
+    #packed_data = b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(mat, order='C')])
+    #WARNING: assumes row-major order
+    packed_data = b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in mat.flat])
     return (header, packed_data)
 
 
@@ -314,7 +316,7 @@ def main():
   #initializes SPController
   spc = SPController(debug=False)
 
-  spc.start(verbose=0)
+  spc.start(verbose=3)
   
   a = spc.read_matrix_from_enclave()
   if a is None:
