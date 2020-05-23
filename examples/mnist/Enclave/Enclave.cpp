@@ -215,16 +215,15 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
   
   char str_in[STRUCTURE_BUFLEN] = {'\0'};
 
-  
 
 #ifdef NENCLAVE
-  if(file_to_string(network_structure_fname, str_in)){
+  if(file_to_string(network_structure_fname, str_in, STRUCTURE_BUFLEN+1)){
     return 1;
   }
 #else
   sgx_status_t ocall_status;
   int ocall_ret;
-  ocall_status = file_to_string(&ocall_ret, network_structure_fname, str_in);
+  ocall_status = file_to_string(&ocall_ret, network_structure_fname, str_in, STRUCTURE_BUFLEN+1);
   if(ocall_ret){
     return 1;
   }
@@ -398,21 +397,21 @@ void mask(float * data, int len, float * mask_data, bool do_mask=true){
 
 
 
-void matrix_add(float * a, float * b, int elts, float * result){
+void matrix_add(const float * a, const float * b, int elts, float * result){
   for(int i = 0; i < elts; i++){
     result[i] = a[i] + b[i];
   }
 }
 
-void matrix_sub(float * a, float * b, int elts, float * result){
+void matrix_sub(const float * a, const float * b, int elts, float * result){
   for(int i = 0; i < elts; i++){
     result[i] = a[i] - b[i];
   }
 }
 
 //Allocates memory
-void matrix_multiply(float * a, const int a_width, const int a_height,
-    float * b, const int b_width, const int b_height, 
+void matrix_multiply(const float * a, const int a_width, const int a_height,
+    const float * b, const int b_width, const int b_height, 
     float ** c, int * c_width, int * c_height, const int negate=0){
   assert(a_width == b_height);
   assert(a_height > 0);
@@ -478,7 +477,7 @@ float * transform(const float * x, const float * term, const int width, const in
 
 float * transpose(const float * x, const int width, const int height){
   float * ret = (float *) malloc(sizeof(float) * width * height);
-  for(int w_idx = 0; w_idx < width, w_idx++){
+  for(int w_idx = 0; w_idx < width; w_idx++){
     for(int h_idx = 0; h_idx < height; h_idx++){
       INDEX_FLOATMAT(ret, h_idx, w_idx, height) = INDEX_FLOATMAT(x, w_idx, h_idx, width);
     }
@@ -493,7 +492,7 @@ void backwards_demask(const float * input, const int input_width, const int inpu
     const float * weights, const int weights_width, const int weights_height,
     const float * weights_mask, const int weights_mask_width, const int weights_mask_height,
     const float * grad_output, const int grad_output_width, const int grad_output_height,
-    const float * grad_mask, const int grad_mask_width, const int grad_mask_height
+    const float * grad_mask, const int grad_mask_width, const int grad_mask_height,
     float ** d_ret, float ** e_ret){
   //Calculate weight_rand_mask - b
   float * diff3_diff = (float *) malloc(sizeof(float) * input_mask_width * weights_height);
@@ -504,12 +503,12 @@ void backwards_demask(const float * input, const int input_width, const int inpu
   float * diff_tmp;
   matrix_multiply(input_mask, weights_width, weights_height,
    diff3_diff, input_mask_height, weights_width, //Swap width and height
-   diff_tmp, &diff_w, &diff_h, 0);
+   &diff_tmp, &diff_w, &diff_h, 0);
 
   float * diff2;
   matrix_multiply(input, input_width, input_height, 
     weights_mask_transpose, weights_mask_height, weights_mask_width, //Swap height and weights here
-    diff2, &diff_w, &diff_h, 0);
+    &diff2, &diff_w, &diff_h, 0);
   matrix_sub(diff_tmp, diff2, diff_w * diff_h, diff_tmp);
 
   free(weights_mask_transpose);
@@ -529,12 +528,12 @@ void backwards_demask(const float * input, const int input_width, const int inpu
   float * d_diffb;
   matrix_multiply(grad_output, grad_output_width, grad_output_height,
     weight_mask_weights, grad_output_width, weights_height, 
-    d_diffb, d_diffb_w, d_diffb_h, 0);
+    &d_diffb, &d_diffb_w, &d_diffb_h, 0);
   int diffc_diffa_w, diffc_diffa_h;
   float * diffc_diffa;
   matrix_multiply(grad_rand_mask_transformed, diff_w, diff_h,
     weight_mask_weights, grad_output_width, weights_height,
-    diffc_diffa, &diffc_diffa_w, &diffc_diffa_h, 1);
+    &diffc_diffa, &diffc_diffa_w, &diffc_diffa_h, 1);
   matrix_add(diffc_diffa, d_diffb, d_diffb_w * d_diffb_h, diffc_diffa);
   free(d_diffb); //Don't free diffc_diffa
 
@@ -561,7 +560,6 @@ void backwards_demask(const float * input, const int input_width, const int inpu
   free(diff_tmp);
   free(grad_output_transpose);
   free(a_randmask);
-  free(difff_diffg);
   free(weight_mask_weights);
   free(diffg_difff);
 
@@ -586,14 +584,15 @@ void forward_demask(const float * input, const float * input_masks,
   matrix_sub(weights, weights_masks, total_elts, tmp);
 
   float * c_d2;
+  int w_dummy, h_dummy;
   matrix_multiply(input, width, height, tmp, width, height, &c_d2, &w_dummy, &h_dummy, 0);
 
   float * d3_d;
-  matrix_multiply(input_masks, width, height, tmp, width, height, &c_d2, &w_dummy, &h_dummy, 1);
+  matrix_multiply(input_masks, width, height, tmp, width, height, &d3_d, &w_dummy, &h_dummy, 1);
   
   matrix_sub(c_d2, d3_d, total_elts, c_d2);
   activate(c_d2, height, width);
-  matrix_add(c_d2, input_masks);
+  matrix_add(c_d2, input_masks, total_elts, c_d2);
 
   *result = c_d2;
 

@@ -57,7 +57,7 @@ enclave {
         int csv_getline([in, string] char * input_csv_name,
 [in,out,size=num_vals] float * vals, [in, size=1] char * label, size_t num_vals);
         void print_out([in, string] char * msg, int error);
-        int file_to_string([in, string] char * fname, [out, size=str_len+1] char * out, size_t str_len);
+        int file_to_string([in, string] char * fname, [out, size=str_len] char * out, size_t str_buf_len);
         int read_weight_file([in, string] char * filename, size_t
 num_elements, [out, size=num_elements] float * buf);
     };

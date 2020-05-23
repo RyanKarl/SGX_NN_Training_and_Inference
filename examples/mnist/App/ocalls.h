@@ -118,7 +118,7 @@ void print_out(char * msg, int error){
 }
 
 
-int file_to_string(char * fname, char * out){
+int file_to_string(char * fname, char * out, size_t str_buf_len){
   ifstream network_ifs(fname);
   std::ostringstream oss;
   assert(network_ifs.good());
