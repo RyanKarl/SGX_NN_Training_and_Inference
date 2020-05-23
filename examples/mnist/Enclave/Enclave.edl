@@ -50,16 +50,16 @@ enclave {
      */
     
     untrusted {
-        int init_streams([in, out, string] char * inpipe_fname, [in, out, string] char * outpipe_fname);
-        int read_stream([in,out, size=total_bytes] void * buf, size_t total_bytes);
-        int write_stream([in,out, size=total_bytes] void * buf, size_t total_bytes);
+        int init_streams([in, string] char * inpipe_fname, [in, string] char * outpipe_fname);
+        int read_stream([out, size=total_bytes] void * buf, size_t total_bytes);
+        int write_stream([in, size=total_bytes] void * buf, size_t total_bytes);
         int close_streams();
-        int csv_getline([in, out, string] char * input_csv_name,
-[in,out,size=num_vals] float * vals, [in,out] char * label, size_t num_vals);
-        void print_out([in, out, string] char * msg, int error);
-        int file_to_string([in, out, string] char * fname, [in, out, string] char * out);
-        int read_weight_file([in, out, string] char * filename, size_t
-num_elements, [in,out, size=num_elements] float * buf);
+        int csv_getline([in, string] char * input_csv_name,
+[in,out,size=num_vals] float * vals, [in, size=1] char * label, size_t num_vals);
+        void print_out([out, string] char * msg, int error);
+        int file_to_string([in, string] char * fname, [out, string] char * out);
+        int read_weight_file([in, string] char * filename, size_t
+num_elements, [out, size=num_elements] float * buf);
     };
     
 
