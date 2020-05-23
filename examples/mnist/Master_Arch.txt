@@ -1,2 +1,2 @@
 1 4 4
-4 4 fc1.txt 0
+4 4 weights16.txt 0
