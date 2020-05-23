@@ -104,7 +104,7 @@ class SPController:
       #.pack takes object and puts into bit field
       #.nditer iterates over multidimensional array in c style i.e. gets raw values
       for y in input_matrices:
-        input_data += b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in np.nditer(y, order='C')])
+        input_data += b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in y.flat])
     else:
       input_data = np.nditer(input_data, order='C')  
       
@@ -321,15 +321,20 @@ def main():
   a = spc.read_matrix_from_enclave()
   if a is None:
     print("ERROR in reading input")
+  else:
+    print("GPU received input")  
     
   b = spc.read_matrix_from_enclave()
   if b is None:
     print("ERROR in reading weights")
+  else:
+    print("GPU received weights")   
     
   c = a @ b
   spc.send_to_enclave(c)  
+  print("GPU sent result")
   
-  spc.close()
+  spc.close(force=False)
   return  
     
 if __name__ == '__main__':
