@@ -156,9 +156,8 @@ int read_weight_file(char * filename, size_t num_elements, float * buf){
 //Assumes comma-delimited
 int read_weight_file_plain(char * filename, size_t bufsize, float * buf){
   ifstream fs(filename);
-  int i;
   char comma_holder;
-  for(i = 0; i < bufsize/sizeof(float); i++){
+  for(size_t i = 0; i < bufsize/sizeof(float); i++){
     if(!fs.good()){
       return 1;
     }

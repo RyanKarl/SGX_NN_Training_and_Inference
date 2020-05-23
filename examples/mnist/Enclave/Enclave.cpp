@@ -334,18 +334,18 @@ int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
   for(size_t i = 0; i < layers.size(); i++){
     bufs[i] = (float *) malloc(layers[i].height * layers[i].width * sizeof(float));
     //Should check return val
-    int ocall_ret;
     size_t len = layers[i].filename.size();
     char * fname_buf = (char *) malloc(len+1);
     strncat(fname_buf, layers[i].filename.c_str(), len);
 #ifdef NENCLAVE
-    if(read_weight_file_plain(layers[i].filename.c_str(), layers[i].height * layers[i].width * sizeof(float), bufs[i])){
+    if(read_weight_file_plain(fname_buf, layers[i].height * layers[i].width * sizeof(float), bufs[i])){
       return 1;
     }
 #else
+    int ocall_ret;
     sgx_status_t ocall_status;
-    ocall_status = read_weight_file_plain(&ocall_ret, layers[i].filename.c_str(), layers[i].height * layers[i].width * sizeof(float), bufs[i]);
-    if(ocall_status){
+    ocall_status = read_weight_file_plain(&ocall_ret, fname_buf, layers[i].height * layers[i].width * sizeof(float), bufs[i]);
+    if(ocall_status || ocall_ret){
       return 1;
     }
     //Need data in non-const container for ocall
