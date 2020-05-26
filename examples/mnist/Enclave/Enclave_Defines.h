@@ -1,5 +1,5 @@
-#ifndef ENCLAVE_GLOBALS_H
-#define ENCLAVE_GLOBALS_H
+#ifndef ENCLAVE_DEFINES_H
+#define ENCLAVE_DEFINES_H
 
 #include <limits.h>
 # ifndef CHAR_BIT

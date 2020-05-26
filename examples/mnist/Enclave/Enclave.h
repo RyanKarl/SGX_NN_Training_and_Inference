@@ -1,8 +1,8 @@
 //Enclave.h
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
 
-#ifndef ENCLAVE_FUNCTIONS_H
-#define ENCLAVE_FUNCTIONS_H
+#ifndef ENCLAVE_H
+#define ENCLAVE_H
 
 #include "Enclave_Defines.h"
 

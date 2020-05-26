@@ -1,3 +1,7 @@
+#ifndef MATRIX_H
+#define MATRIX_H
+#include <cmath>
+
 #include "Enclave_Defines.h"
 
 
@@ -98,3 +102,66 @@ float * transpose(const float * x, const int width, const int height){
   }
   return ret;
 }
+
+//https://stats.stackexchange.com/questions/338285/how-does-the-subtraction-of-the-logit-maximum-improve-learning
+#define FP_LARGE_T double
+void softmax(float * x, const int total_elts){
+#ifdef DEBUG
+  assert(total_elts > 0);
+#endif  
+  //Get maximum element
+  float max_elt = x[0];
+  for(int i = 0; i < total_elts; i++){
+    if(max_elt > x[i]){
+      max_elt = x[i];
+    }
+  }
+  //Calculate x - x.max
+  for(int i = 0; i < total_elts; i++){
+    x[i] -= max_elt;
+  }
+  FP_LARGE_T * x_tmp = malloc(sizeof(FP_LARGE_T) * total_elts);
+  //Exponentiate the matrix - hope this fits in float32!
+  FP_LARGE_T sum = 0;
+  for(int i = 0; i < total_elts; i++){
+    x_tmp[i] = exp(x[i]);
+    sum += x_tmp[i];
+#ifdef DEBUG
+    assert(x_tmp[i] > 0);
+    assert(x_tmp[i] < 1);
+#endif    
+  }
+
+  for(int i = 0; i < total_elts; i++){
+    x[i] = x_tmp[i]/sum;
+  }
+  free(x_tmp);
+  return;
+}
+
+//https://stats.stackexchange.com/questions/215521/how-to-find-derivative-of-softmax-function-for-the-purpose-of-gradient-descent/328095
+void softmax_derivative(float * y, const int n){
+  //First, create the identity matrix
+  float * y_squared;
+  int y_sq_h, y_sq_w;
+  matrix_multiply(y, 1, n,
+    y, n, 1, 
+    &y_squared, &y_sq_w, &y_sq_h, 0);
+#ifdef DEBUG  
+  assert(y_sq_w == n);
+  assert(y_sq_h == n);
+#endif  
+  for(int i = 0; i < n; i++){
+    for(int j = 0; j < n; j++){
+      INDEX_FLOATMAT(y, i, j, n) = (i == j)?
+       -INDEX_FLOATMAT(y_squared, i, j, n) : 
+       INDEX_FLOATMAT(y, i, j, n) - INDEX_FLOATMAT(y_squared, i, j, n);
+    }
+  }
+  free(y_squared);
+  return;
+}
+
+
+
+#endif
