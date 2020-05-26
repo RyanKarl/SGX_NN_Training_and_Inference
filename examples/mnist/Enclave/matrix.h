@@ -1,6 +1,7 @@
 #ifndef MATRIX_H
 #define MATRIX_H
 #include <cmath>
+#include <cassert>
 
 #include "Enclave_Defines.h"
 
@@ -120,7 +121,7 @@ void softmax(float * x, const int total_elts){
   for(int i = 0; i < total_elts; i++){
     x[i] -= max_elt;
   }
-  FP_LARGE_T * x_tmp = malloc(sizeof(FP_LARGE_T) * total_elts);
+  FP_LARGE_T * x_tmp = (FP_LARGE_T *) malloc(sizeof(FP_LARGE_T) * total_elts);
   //Exponentiate the matrix - hope this fits in float32!
   FP_LARGE_T sum = 0;
   for(int i = 0; i < total_elts; i++){
@@ -140,7 +141,8 @@ void softmax(float * x, const int total_elts){
 }
 
 //https://stats.stackexchange.com/questions/215521/how-to-find-derivative-of-softmax-function-for-the-purpose-of-gradient-descent/328095
-void softmax_derivative(float * y, const int n){
+//Returns a pointer to dynamically freed memory
+float * softmax_derivative(float * y, const int n){
   //First, create the identity matrix
   float * y_squared;
   int y_sq_h, y_sq_w;
@@ -153,13 +155,12 @@ void softmax_derivative(float * y, const int n){
 #endif  
   for(int i = 0; i < n; i++){
     for(int j = 0; j < n; j++){
-      INDEX_FLOATMAT(y, i, j, n) = (i == j)?
+      INDEX_FLOATMAT(y_squared, i, j, n) = (i != j)?
        -INDEX_FLOATMAT(y_squared, i, j, n) : 
-       INDEX_FLOATMAT(y, i, j, n) - INDEX_FLOATMAT(y_squared, i, j, n);
+       y[j] - INDEX_FLOATMAT(y_squared, i, j, n);
     }
   }
-  free(y_squared);
-  return;
+  return y_squared;
 }
 
 
