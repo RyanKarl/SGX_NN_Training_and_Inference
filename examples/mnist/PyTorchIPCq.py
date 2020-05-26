@@ -9,8 +9,10 @@ import time
 import pickle
 input_ = input
 
+from quant import quant_w, quant_act, quant_grad, quant_err, SSE
+
 torch.set_default_dtype(torch.float32)
-super_mega_mask = pickle.load(open("mask.p", 'rb')).to("cuda:0") #torch.rand(10000,10000, device = "cuda:0") * 1
+super_mega_mask = quant_w(pickle.load(open("mask.p", 'rb')).to("cuda:0")) #torch.rand(10000,10000, device = "cuda:0") * 1
 
 def my_cross_entropy(x, y):
     #x = x - 1
@@ -120,7 +122,7 @@ class MyFunction3(Function):
         # masked_ouput = masked_input @ masked_weights
         # decrypted_output = maksed_output - random_matrix @ true_weights + (not so) extreme foiling
 
-        output = SGXFL(input, weight)
+        output = SGXFL(input, quant_w(weight))
 
         #lalala sgx stuff
         # input = input.detach().numpy()
@@ -159,7 +161,7 @@ class MyFunction3(Function):
         #     grad_weight = grad_output.t().mm(input)
         # if bias is not None and ctx.needs_input_grad[2]:
         #     grad_bias = grad_output.sum(0)
-        a,b = SGXBL(grad_output, input, weight)
+        a,b = SGXBL(grad_output, input, quant_w(weight))
         return a, b, grad_bias, None 
 
 
@@ -183,7 +185,8 @@ class LinearAltLast(nn.Module):
         else:
             self.register_parameter('bias', None)
 
-        self.weight.data.uniform_(-0.1, 0.1)
+        self.weight.data.uniform_(-.1, .1)
+        self.weight.data = quant_w(self.weight.data)
         self.weight.data += super_mega_mask[0:self.weight.shape[0], 0:self.weight.shape[1]].to("cpu")
         if bias is not None:
             self.bias.data.uniform_(-0.1, 0.1)
@@ -356,7 +359,7 @@ class MyFunction2(Function):
 
         # masked_ouput = masked_input @ masked_weights
         # decrypted_output = maksed_output - random_matrix @ true_weights + (not so) extreme foiling
-        output = SGXF(input, weight)
+        output = SGXF(input, quant_w(weight))
 
         ctx.save_for_backward(input, weight, bias, output)
 
@@ -397,7 +400,7 @@ class MyFunction2(Function):
         #     grad_weight = grad_output.t().mm(input)
         # if bias is not None and ctx.needs_input_grad[2]:
         #     grad_bias = grad_output.sum(0)
-        a,b = SGXB(grad_output, input, weight, output)
+        a,b = SGXB(grad_output, input, quant_w(weight), output)
         return a, b, grad_bias, None
 
 
@@ -421,7 +424,8 @@ class LinearAlt(nn.Module):
         else:
             self.register_parameter('bias', None)
 
-        self.weight.data.uniform_(-0.1, 0.1)
+        self.weight.data.uniform_(-.1, .1)
+        self.weight.data = quant_w(self.weight.data)
         self.weight.data += super_mega_mask[0:self.weight.shape[0], 0:self.weight.shape[1]].to("cpu")
         if bias is not None:
             self.bias.data.uniform_(-0.1, 0.1)

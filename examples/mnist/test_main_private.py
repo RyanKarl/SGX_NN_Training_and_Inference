@@ -5,8 +5,12 @@ import torchvision
 import torchvision.transforms as transforms
 import time
 import numpy as np
-from PyTorchIPC import LinearAlt, ConvAlt, LinearAltLast, my_cross_entropy
+from PyTorchIPCq import LinearAlt, ConvAlt, LinearAltLast, my_cross_entropy
 from optimizer import SGD, MyLoss
+import pickle
+from quant import SSE
+
+super_mega_mask = pickle.load(open("mask.p", 'rb')).to("cuda:0") #torch.rand(10000,10000, device = "cuda:0") * 1
 
 #Force Determinism
 torch.manual_seed(0)
@@ -22,19 +26,37 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 input_size = 784
 hidden_size = 500
 num_classes = 10
-num_epochs = 10
+num_epochs = 5
 batch_size = 128
-learning_rate = 1
+learning_rate = 2
+
+
+train = np.loadtxt("mnist_train.csv", skiprows=1, delimiter=',')
+test = np.loadtxt("mnist_test.csv", skiprows=1, delimiter=',')
+
+x = torch.tensor(train[:,1:785] / 255).float()
+y = torch.tensor(train[:,0])
+
+x_t = torch.tensor(test[:,1:785] / 255).float()
+y_t = torch.tensor(test[:,0])
+
+train_dataset = torch.utils.data.TensorDataset(x,y)
+test_dataset = torch.utils.data.TensorDataset(x_t,y_t)
+
+
+
+
+
 
 # MNIST dataset 
-train_dataset = torchvision.datasets.MNIST(root='../../data', 
-                                           train=True, 
-                                           transform=transforms.ToTensor(),  
-                                           download=True)
+# train_dataset = torchvision.datasets.MNIST(root='../../data', 
+#                                            train=True, 
+#                                            transform=transforms.ToTensor(),  
+#                                            download=True)
 
-test_dataset = torchvision.datasets.MNIST(root='../../data', 
-                                          train=False, 
-                                          transform=transforms.ToTensor())
+# test_dataset = torchvision.datasets.MNIST(root='../../data', 
+#                                           train=False, 
+#                                           transform=transforms.ToTensor())
 
 # Data loader
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, 
@@ -76,6 +98,7 @@ class NeuralNet(nn.Module):
         # out = self.conv2(out)
         # out = self.conv3(out)
         out = self.flat(x)
+        out = out + super_mega_mask[0:out.shape[0], 0:out.shape[1]]
         out = self.fc1(out)
         # out = self.tanh(out)
         #For testing... will move later
@@ -97,7 +120,7 @@ model = NeuralNet(input_size, hidden_size, num_classes).to(device)
 
 
 # Loss and optimizer
-criterion = my_cross_entropy
+criterion = SSE
 optimizer = SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
 
 # Train the model
@@ -105,7 +128,8 @@ total_step = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):  
         # Move tensors to the configured device
-        images = images.reshape(-1, 28,28, 1).to(device)
+        images = images.reshape(-1, 28,28, 1).to(device) #* 255
+        images = images
         labels = labels.to(device)
         
         # images += 1
@@ -130,7 +154,8 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.reshape(-1, 28,28, 1).to(device)
+        images = images.reshape(-1, 28,28, 1).to(device) #* 255
+        images = images
         labels = labels.to(device)
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
