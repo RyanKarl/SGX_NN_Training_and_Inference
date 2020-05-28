@@ -221,8 +221,10 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
   num_inputs = atoi(strtok(str_in, " \n"));
   input_height = atoi(strtok(NULL, " \n"));
   input_width = atoi(strtok(NULL, " \n"));
+  unsigned int num_layers = atoi(strtok(NULL, " \n"));
+  layer_files.reserve(num_layers);
 
-  for(unsigned int i = 0; i < num_inputs; i++){
+  for(unsigned int i = 0; i < num_layers; i++){
     layer_file_t lft;
 
     lft.height = atoi(strtok(NULL, " \n"));
@@ -243,7 +245,7 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
   }
   */
   //network_ifs.close();
-  return layer_files.size() == num_inputs? 0 : 1;
+  return layer_files.size() == num_layers? 0 : 1;
 }
 
 #define MNIST_VALS 784
@@ -568,11 +570,22 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   }
 
   for(unsigned int input_idx = 0; input_idx < num_inputs; input_idx++){
-  
+#ifdef NENCLAVE
+      if(verbose >= 2){
+        cout << "Starting input " << input_idx << endl;
+      }
+#endif   
+
     float * input_data;
     
     //Check that the array's size is equal to the expected height*width
     for(unsigned int layer_idx = 0; layer_idx < num_layers; layer_idx++){
+
+  #ifdef NENCLAVE
+      if(verbose >= 2){
+        cout << "Starting layer " << layer_idx << endl;
+      }
+#endif   
     
       int data_height, data_width;
     
@@ -661,11 +674,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 #ifdef NENCLAVE  
       if(write_stream((void *) input_data, sizeof(float)*data_height*data_width)){
         print_out("Failed writing input", true);
-        assert(input_data);
-        for(int i = 0; i < data_height*data_width; i++){
-          cout << input_data[i] << ' ';
+        assert(input_data != NULL);
+        if(verbose >= 3){
+          for(int i = 0; i < data_height*data_width; i++){
+            cout << input_data[i] << ' ';
+          }
+          cout << endl;
         }
-        cout << endl;
         return 1;
       }
 #else
@@ -772,7 +787,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out("Read in result", false);
       }
 
-      //Validate C through Frievald's algorithm
+      //Validate C through Frievalds' algorithm
       //If it fails, send {-1, -1} back to the GPU and exit
       if(frievald(input_data, layer_data[layer_idx], gpu_result, 
   data_height, data_width, data_height, data_width, next_height, next_width)){
@@ -791,8 +806,15 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           return 1;
         }
 #endif        
-        print_out("Frievald's algorithm failed!", true);
+        print_out("Frievalds' algorithm failed!", true);
         return 1;
+      }
+      else{
+#ifdef NENCLAVE
+        if(verbose >= 1){
+          cout << "Frievalds' algorithm succeeded!" << endl;
+        }
+#endif        
       }
 
       //Unmask
@@ -813,11 +835,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //TODO write layers back out
       
       //Setup things for the next iteration
-      if(layer_idx){
+      if(layer_idx != num_layers - 1){
         input_data = gpu_result;
       }
-    }
-  }
+#ifdef NENCLAVE
+      if(verbose >= 2){
+        cout << "Finished layer " << layer_idx << endl;
+      }
+#endif      
+    } //layer_idx
+  } //input_idx
+
   
   //Cleanup layers
   for(size_t i = 0; i < layer_files.size(); i++){

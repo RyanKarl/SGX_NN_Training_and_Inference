@@ -10,10 +10,12 @@
 # define MAT_DIM 2
 # define K_PROBABILITY 2
 
+# define FLOAT_TOLERANCE 1e-3
+
 # define INDEX_FLOATMAT(f, i, j, n) (f[(i*n)+(j)])
 //Assumes f is a char *
 # define INDEX_BITARR(f, i) (( (f[i / CHAR_BIT]) >> (i%CHAR_BIT)) & 1)
-# define FLOAT_CMP(a, b) (a != b)
+# define FLOAT_CMP(a, b) (abs(a - b) >= FLOAT_TOLERANCE)
 
 #define STRUCTURE_BUFLEN 1024
 
