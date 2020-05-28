@@ -64,7 +64,7 @@ int init_streams(char * inpipe_fname, char * outpipe_fname){
 //Requires a buffer to be allocated
 int read_stream(void * buf, size_t total_bytes){
   int res = fread((void *) buf, 1, total_bytes, instream);
-  return (res != 0)? 0 : 1;
+  return (res == (int)total_bytes)? 0 : res;
 }
 
 
@@ -72,9 +72,9 @@ int write_stream(void * buf, size_t total_bytes){
   if(buf == NULL){
     return 1;
   }
-  int res = fwrite((void *) buf, total_bytes, 1, outstream);
+  int res = fwrite((void *) buf, 1, total_bytes, outstream);
   fflush(outstream);
-  return (res != 0)? 0 : 1;
+  return (res == (int)total_bytes)? 0 : res;
 }
 
 int close_streams(){
@@ -161,7 +161,7 @@ int read_weight_file_plain(char * filename, size_t bufsize, float * buf){
     if(!fs.good()){
       return 1;
     }
-    fs >> buf[i] >> comma_holder;  
+    fs >> buf[i] >> comma_holder;   
   }
   return 0;
 }

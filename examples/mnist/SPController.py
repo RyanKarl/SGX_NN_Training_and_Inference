@@ -322,13 +322,17 @@ def main():
   if a is None:
     print("ERROR in reading input")
   else:
-    print("GPU received input")  
+    print("GPU received input:")
+    print(str(a))  
+    print(a.shape)
     
   b = spc.read_matrix_from_enclave()
   if b is None:
     print("ERROR in reading weights")
   else:
-    print("GPU received weights")   
+    print("GPU received weights:")
+    print(str(b))   
+    print(b.shape)
     
   c = a @ b
   spc.send_to_enclave(c)  

@@ -545,6 +545,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   if(verbose){
     print_out("Finished parsing network", false);
   }  
+#ifdef NENCLAVE
+  if(verbose >= 3){
+    for(const layer_file_t & lft : layer_files){
+      cout << lft.height << ' ' << lft.width << ' ' << lft.filename << endl;
+    }
+    cout << endl;
+  }
+#endif  
   
   num_layers = layer_files.size();
 
@@ -597,6 +605,15 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         if(verbose){
           print_out("Read input from file", false);
         }
+#ifdef NENCLAVE
+        if(verbose >= 3){
+          cout << "Input from file:\n";
+          for(int i = 0; i < data_height*data_width; i++){
+            cout << input_data[i] << ' ';
+          }
+          cout << endl;
+        }
+#endif        
       }
       else{
         data_height = layer_files[layer_idx].height;
@@ -624,8 +641,10 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       int out_dims[2] = {data_height, data_width};
      
 #ifdef NENCLAVE
-      if(write_stream((void *) out_dims, sizeof(out_dims))){
+      int written = write_stream((void *) out_dims, sizeof(out_dims));
+      if(written){
         print_out("Failed writing input dimensions", true);
+        cout << written << " bytes sent" << endl;        
         return 1;
       }
 #else
@@ -660,14 +679,26 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       if(verbose){
         print_out("Sent input", false);
       }
+#ifdef NENCLAVE
+      if(verbose >= 3){
+        cout << "Input:\n";
+        for(int i = 0; i < data_height*data_width; i++){
+          cout << input_data[i] << ' ';
+        }
+        cout << endl;
+      }
+#endif      
       
+
+
+      int weight_dims[2] = {layer_files[layer_idx].height, layer_files[layer_idx].width};
 #ifdef NENCLAVE      
-      if(write_stream((void *) out_dims, sizeof(out_dims))){
+      if(write_stream((void *) weight_dims, sizeof(weight_dims))){
         print_out("Failed writing weights dimensions", true);
         return 1;
       }
 #else      
-      ocall_status = write_stream(&ocall_ret, (void *) out_dims, sizeof(out_dims));
+      ocall_status = write_stream(&ocall_ret, (void *) weight_dims, sizeof(weight_dims));
       if(ocall_ret){
         print_out("Failed writing weights dimensions", true);
         return 1;
@@ -678,12 +709,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
       
 #ifdef NENCLAVE      
-      if(write_stream((void *) layer_data[layer_idx], sizeof(float)*data_height*data_width)){
+      if(write_stream((void *) layer_data[layer_idx], sizeof(float)*weight_dims[0]*weight_dims[1])){
         print_out("Failed writing weights", true);
         return 1;
       }
 #else
-      ocall_status = write_stream(&ocall_ret, (void *) layer_data[layer_idx], sizeof(float)*data_height*data_width);
+      ocall_status = write_stream(&ocall_ret, (void *) layer_data[layer_idx], sizeof(float)*weight_dims[0]*weight_dims[1]);
       if(ocall_ret){
         print_out("Failed writing weights", true);
         return 1;
@@ -692,6 +723,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       if(verbose){
         print_out("Sent weights", false);
       }
+#ifdef NENCLAVE
+      if(verbose >= 3){
+        for(int i = 0; i < weight_dims[0]*weight_dims[1]; i++){
+          cout << layer_data[layer_idx][i] << ' ';
+        }
+        cout << endl;
+      }
+#endif   
       
       //Get back a result C ?= A*B
       //Read in dimensions, then data
