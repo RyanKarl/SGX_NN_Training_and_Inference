@@ -506,6 +506,13 @@ void forward_demask(const float * input, const float * input_masks,
   free(d3_d);
 }
 
+void update_weights(float * weights, const float * weights_gradient, int total_elts, float learning_rate){
+  for(int i = 0; i < total_elts; i++){
+    weights[i] -= learning_rate*weights_gradient[i];
+  }
+  return;
+}
+
 
 
 //Need OCALLS for pipe I/O, setup, teardown
