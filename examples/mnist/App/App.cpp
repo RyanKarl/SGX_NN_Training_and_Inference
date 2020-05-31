@@ -21,7 +21,6 @@ malloc_consolidate();\
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
-#include <malloc.h>
 
 #include <iostream>
 
@@ -242,10 +241,11 @@ int main(int argc, char ** argv){
   char * output_pipe_path = NULL;
   char * network_structure_fname = NULL;
   char * input_csv_filename = NULL;
+  char * weights_outfile = NULL;
   int verbose = 0;
 
   char c;
-  while((c = getopt(argc, argv, "s:c:i:o:v")) != -1){
+  while((c = getopt(argc, argv, "s:c:i:o:vw:")) != -1){
     switch(c){
       case 'v':{
         verbose += 1;
@@ -265,6 +265,10 @@ int main(int argc, char ** argv){
       }
       case 'c':{
         input_csv_filename = optarg;
+        break;
+      }
+      case 'w':{
+        weights_outfile = optarg;
         break;
       }
       default:{
@@ -292,12 +296,13 @@ int main(int argc, char ** argv){
 #endif  
 
 #ifdef NENCLAVE
-  int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, verbose);
+  int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, weights_outfile, verbose);
   
 #else
   int enclave_result;
   sgx_enclave_id_t eid = global_eid;
-  sgx_status_t sgx_enclave_stat = enclave_main(eid, &enclave_result, network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, verbose); 
+  sgx_status_t sgx_enclave_stat = enclave_main(eid, &enclave_result, network_structure_fname, input_csv_filename, 
+    input_pipe_path, output_pipe_path, weights_outfile, verbose); 
 #endif  
 
   if(verbose){

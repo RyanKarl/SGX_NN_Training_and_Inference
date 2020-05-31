@@ -104,7 +104,9 @@ int csv_getline(char * csv_filename, float * vals, char * label, size_t num_vals
     //Normalize float value
     vals[i] /= (1 << CHAR_BIT);
   }
-  ifs >> *label;
+  int label_i;
+  ifs >> label_i;
+  *label = label_i;
   return 0;
 }
 
@@ -115,6 +117,17 @@ void print_out(char * msg, int error){
   else{
     cout << msg << endl;
   }
+}
+
+int floats_to_csv(char * fname, size_t num_elts, float * data){
+  ofstream ofs(fname);
+  for(size_t i = 0; i < num_elts; i++){
+    ofs << data[i];
+    if(i != num_elts-1){
+      ofs << ',';
+    }
+  }
+  return ofs.good() ? 0 : 1;
 }
 
 
