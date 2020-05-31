@@ -337,6 +337,8 @@ def main():
       print(b.shape)
       
     c = a @ b
+    print("GPU's result:")
+    print(str(c))
     spc.send_to_enclave(c)  
     print("GPU sent result")
   

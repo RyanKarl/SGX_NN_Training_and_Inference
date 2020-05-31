@@ -513,6 +513,12 @@ void update_weights(float * weights, const float * weights_gradient, int total_e
   return;
 }
 
+void normalize(float * x, int total_elts){
+  for(int i = 0; i < total_elts; i++){
+    x[i] = atan(x[i]) * (2.0f/M_PI);
+  }
+  return;
+}
 
 
 //Need OCALLS for pipe I/O, setup, teardown
@@ -649,10 +655,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       float * mask_data = (float *) malloc(sizeof(float)*data_height*data_width);
       //Cast should be explicit, for the non-SGX version
       rand_bytes((unsigned char *) mask_data, sizeof(float)*data_height*data_width);
+      //Normalize mask
+      normalize(mask_data, data_height*data_width);
       //Next, mask the data
       mask(input_data, data_height*data_width, mask_data, false);
       if(verbose){
-        print_out("Finished masking", false);
+        print_out("Finished masking input", false);
       }
 
       
@@ -711,7 +719,15 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
 #endif      
       
-
+      //Also mask weights
+      float * mask_weights = (float *) malloc(sizeof(float) * layer_files[layer_idx].height * layer_files[layer_idx].width);
+      //Cast should be explicit, for the non-SGX version
+      rand_bytes((unsigned char *) mask_weights, sizeof(float) * layer_files[layer_idx].height * layer_files[layer_idx].width);
+      normalize(mask_weights, layer_files[layer_idx].height * layer_files[layer_idx].width);
+      mask(layer_data[layer_idx], layer_files[layer_idx].height * layer_files[layer_idx].width, mask_weights, false);
+      if(verbose){
+        print_out("Finished masking weights", false);
+      }
 
       int weight_dims[2] = {layer_files[layer_idx].height, layer_files[layer_idx].width};
 #ifdef NENCLAVE      
@@ -824,9 +840,11 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 #endif        
       }
 
-      //Unmask
-      unmask(gpu_result, next_height, next_width, mask_data, layer_data[layer_idx]);
-      
+      //Unmask - TODO replace with forward demask
+      //unmask(gpu_result, next_height, next_width, mask_data, layer_data[layer_idx]);
+      float * unmasked_result;
+      forward_demask(gpu_result, mask_data, layer_data[layer_idx], mask_weights, data_height, data_width, &unmasked_result);
+
       //Cleanup random mask
       free(mask_data);
       mask_data = NULL;
@@ -843,8 +861,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       
       //Setup things for the next iteration
       if(layer_idx != num_layers - 1){
-        input_data = gpu_result;
+        input_data = unmasked_result;
       }
+
+      free(gpu_result);
+      gpu_result = NULL;
+
+
+
 #ifdef NENCLAVE
       if(verbose >= 2){
         cout << "Finished layer " << layer_idx << endl;
@@ -853,7 +877,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     } //layer_idx
   } //input_idx
 
-  
+  //TODO write layers back out to file?
+
   //Cleanup layers
   for(size_t i = 0; i < layer_files.size(); i++){
     free(layer_data[i]);
