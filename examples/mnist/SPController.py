@@ -300,19 +300,12 @@ class SPController:
 #TODO strip out using std. IO
 def main():
 
-
+  outfile_name = None
+  fout = None
   #Create standalone file for input
   if len(sys.argv) >= 2:
     outfile_name = sys.argv[1]
-    dims = [4, 4]
-    output = np.zeros(dims)
-    packed_output = SPController.validate_one_matrix(output)
     fout = open(outfile_name, 'wb', buffering=BUFFERING)
-    for i in range(2):
-      fout.write(packed_output[0])
-      fout.write(packed_output[1])
-    fout.close()
-    return
   
   #initializes SPController
   spc = SPController(debug=False)
@@ -337,13 +330,20 @@ def main():
       print(str(b))   
       print(b.shape)
       
-    c = a @ b
+    c = a @ b.transpose()
     print("GPU's result:")
     print(str(c))
     spc.send_to_enclave(c)  
     print("GPU sent result")
+    if outfile_name is not None: 
+      packed_output = SPController.validate_one_matrix(c)
+      fout.write(packed_output[0])
+      fout.write(packed_output[1])
+
   
   spc.close(force=False)
+  if outfile_name is not None:
+    fout.close()
   return  
     
 if __name__ == '__main__':

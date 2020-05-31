@@ -40,6 +40,15 @@ inline void rand_bytes(unsigned char * r, size_t n_bytes){
 }
 #endif
 
+#ifdef NENCLAVE
+void print_floatarr(float * data, int size){
+  for(int i = 0; i < size; i++){
+    cout << data[i] << ' ';
+  }
+  cout << endl;
+}
+#endif
+
 //TODO change index macro to take width
 //0 is height, 1 is width
 int frievald(float * a, float * b, float * c, 
@@ -93,6 +102,10 @@ int frievald(float * a, float * b, float * c,
   for (int i = 0; i < c_width; i++){
     //cout << "axbr[" << i << "] " << axbr[i] << " cr[" << i << "] " << cr[i] << endl;
     if (FLOAT_CMP(axbr[i], cr[i])){
+    //DEBUG      
+#ifdef NENCLAVE
+      cout << "i: " << i << " axbr: " << axbr[i] << " cr: " << cr[i] << endl;
+#endif      
         free(axbr);
         free(cr);
         axbr = cr = NULL;
@@ -375,12 +388,24 @@ void forward_demask(const float * input, const float * input_masks,
   float * tmp = (float *) malloc(sizeof(float)*height*width);
   matrix_sub(weights, weights_masks, total_elts, tmp);
 
-  float * c_d2;
+  float * c_d2 = NULL;
   int w_dummy, h_dummy;
-  matrix_multiply(input, width, height, tmp, width, height, &c_d2, &w_dummy, &h_dummy, 0);
+  //Transpose argument
+  float * tmp_transposed = NULL;
+  tmp_transposed = transpose(tmp, width, height);
 
-  float * d3_d;
-  matrix_multiply(input_masks, width, height, tmp, width, height, &d3_d, &w_dummy, &h_dummy, 1);
+  //DEBUG
+  print_floatarr(tmp, height*width);
+  print_floatarr(tmp_transposed, height*width);
+
+  free(tmp);
+  tmp = NULL;
+
+  //Swap width and height
+  matrix_multiply(input, width, height, tmp_transposed, height, width, &c_d2, &w_dummy, &h_dummy, 0);
+
+  float * d3_d = NULL;
+  matrix_multiply(input_masks, width, height, tmp_transposed, height, width, &d3_d, &w_dummy, &h_dummy, 1);
   
   matrix_sub(c_d2, d3_d, total_elts, c_d2);
   activate(c_d2, height, width);
@@ -388,8 +413,10 @@ void forward_demask(const float * input, const float * input_masks,
 
   *result = c_d2;
 
-  free(tmp);
+  free(tmp_transposed);
+  tmp_transposed = NULL;
   free(d3_d);
+  d3_d = NULL;
 }
 
 void update_weights(float * weights, const float * weights_gradient, int total_elts, float learning_rate){
@@ -497,7 +524,10 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int num_inputs = 0;
   unsigned int batchsize = 0; //TODO initialize
   unsigned int num_pixels = 0;
-  string weights_out_str = weights_outfile;
+  string weights_out_str = "";
+  if(weights_outfile != NULL){
+    weights_out_str = weights_outfile;
+  }
 
 #ifndef NENCLAVE
   sgx_status_t ocall_status;
@@ -552,11 +582,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
   unsigned num_batches = (num_inputs / batchsize) + ((num_inputs % batchsize) ? 1 : 0);
 
+  float * input_data;
+
   for(unsigned int batch_idx = 0; batch_idx < num_batches; batch_idx++){
     //Get images into a matrix
     unsigned num_images_this_batch = (batch_idx == num_batches-1) ? (num_inputs / num_batches) : (num_inputs % num_batches);
-    float * image_data = (float *) malloc(sizeof(float) * num_images_this_batch * num_pixels);
-    float * image_data_csv_ptr = image_data;
+    input_data = (float *) malloc(sizeof(float) * num_images_this_batch * num_pixels);
+    float * image_data_csv_ptr = input_data;
     char * data_labels = (char *) malloc(sizeof(unsigned char) * num_inputs);
     for(unsigned int image_idx = 0; image_idx < num_images_this_batch; image_idx++){
 #ifdef NENCLAVE        
@@ -577,7 +609,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       image_data_csv_ptr += num_pixels; //Increment pointer
     }
 
-    float * input_data;
+    
     //Now we have the whole batch in a single array
     for(unsigned int layer_idx = 0; layer_idx < num_layers; layer_idx++){
       int num_neurons;
@@ -611,7 +643,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out((char *) &("Finished masking weights"[0]), false);
       }
       //Send weights to GPU
-      if(send_to_gpu(input_data, 1, num_neurons, verbose)){
+      if(send_to_gpu(layer_data[layer_idx], 1, num_neurons, verbose)){
         print_out((char *) &("Failed to send input data"[0]), true);
         return 1;
       }
@@ -625,6 +657,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out((char *) &("Failed to receive mult. result from GPU"[0]), true);
         return 1;
       }
+
+#ifdef NENCLAVE
+      if(verbose >= 2){
+        cout << "Input: " << num_images_this_batch << ' ' << num_neurons << endl;
+        cout << "Weights: " << num_neurons << ' ' << 1 << endl;
+        cout << "GPU result: " << num_result_neurons <<  ' ' << result_batchsize << endl;
+      }
+#endif      
 
       //Validate result with Frievalds' algorithm
       //If it fails, send {-1, -1} back to the GPU and exit

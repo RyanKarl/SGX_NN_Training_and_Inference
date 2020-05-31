@@ -96,9 +96,9 @@ float * transform(const float * x, const float * term, const int width, const in
 
 float * transpose(const float * x, const int width, const int height){
   float * ret = (float *) malloc(sizeof(float) * width * height);
-  for(int w_idx = 0; w_idx < width; w_idx++){
-    for(int h_idx = 0; h_idx < height; h_idx++){
-      INDEX_FLOATMAT(ret, h_idx, w_idx, height) = INDEX_FLOATMAT(x, w_idx, h_idx, width);
+  for(int i = 0; i < width; i++){
+    for(int j = 0; j < height; j++){
+      INDEX_FLOATMAT(ret, j, i, width) = INDEX_FLOATMAT(x, i, j, width);
     }
   }
   return ret;
@@ -162,6 +162,7 @@ float * softmax_derivative(float * y, const int n){
   }
   return y_squared;
 }
+
 
 
 
