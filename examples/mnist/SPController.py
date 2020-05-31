@@ -308,8 +308,9 @@ def main():
     output = np.zeros(dims)
     packed_output = SPController.validate_one_matrix(output)
     fout = open(outfile_name, 'wb', buffering=BUFFERING)
-    fout.write(packed_output[0])
-    fout.write(packed_output[1])
+    for i in range(2):
+      fout.write(packed_output[0])
+      fout.write(packed_output[1])
     fout.close()
     return
   

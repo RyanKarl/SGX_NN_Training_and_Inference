@@ -91,7 +91,6 @@ int frievald(float * a, float * b, float * c,
 
   float * axbr;
   int axbr_w, axbr_h;
-  assert(axbr && "Allocating axbr failed!");
   matrix_multiply(a, a_width, a_height, 
     br, br_w, br_h,
     &axbr, &axbr_w, &axbr_h, 0);
