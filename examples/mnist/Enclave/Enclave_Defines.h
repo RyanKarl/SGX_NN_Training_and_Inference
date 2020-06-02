@@ -32,8 +32,7 @@ typedef struct {
 #include <string>
 
 typedef struct {
-	int height;
-	int width;
+	unsigned int neurons;
 	std::string filename;
 	int type;
 } layer_file_t;

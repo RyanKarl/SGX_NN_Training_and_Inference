@@ -35,7 +35,7 @@ height width filename type
 
 
 
-int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, int verbose);
+int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, char * weights_outfile, int verbose);
 
 void mask(float * data, int len, float * mask_data);
 
@@ -49,6 +49,7 @@ int csv_getline(char * input_csv_name, float * vals, char * label, size_t num_va
 void print_out(char * msg, int error);
 int file_to_string(char * fname, char * out, size_t str_buf_len);
 int read_weight_file(char * filename, size_t num_elements, float * buf);
+int floats_to_csv(char * fname, size_t num_elts, float * data);
 
 #if defined(__cplusplus)
 }
