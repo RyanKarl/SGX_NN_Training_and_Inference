@@ -155,7 +155,17 @@ float * softmax_derivative(float * y, const int n){
   return y_squared;
 }
 
-
+unsigned int argmax(float * data, int total_elts){
+  unsigned int idx = 0;
+  float max_data = data[0];
+  for(int i = 0; i < total_elts; i++){
+    if(data[i] > max_data){
+      max_data = data[i]
+      idx = i;
+    }
+  }
+  return idx;
+}
 
 
 #endif

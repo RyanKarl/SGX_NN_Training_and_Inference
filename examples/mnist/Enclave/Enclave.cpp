@@ -441,20 +441,33 @@ void forward_demask(const float * input, const int input_height, const int input
   d3_d = NULL;
 }
 
-//Return one-hot encoding - allocates memory
-//Ordered by label
-float one_hot_encoding_mean(const unsigned int * labels, 
-  const unsigned int * labels_to_test, const int total_elts, const int num_possible_labels){
-  float ret = 0.0f;
-  unsigned char * result_tmp = (unsigned char *) malloc(sizeof(unsigned char)*total_elts);
-  for(int i = 0; i < total_elts; i++){
-    result[i] = 1;
-    for(int j = 0; j < num_possible_labels; j++){
-      result[i] ^= (labels[i] == labels_to_test[j]);
-    }
-    ret += result[i];
+//final_data is the softmax'd unmasked last GPU-multiplied matrix, i.e. x
+float my_cross_entropy_forward(const float * final_data, const int batchsize,
+  const unsigned int * data_labels, const unsigned int * possible_labels, const int num_possible_labels){
+  float * ohe_mean = one_hot_encoding_mean(data_labels, possible_labels, num_possible_labels);
+  //Recall num_neurons is the same as num_possible_labels
+  //float * log_prob = (float *) malloc(sizeof(float)*batchsize*num_possible_labels);
+  float mean_result = 0.0f;
+  for(int i = 0; i < num_possible_labels*batchsize; i++){
+    mean_result -= log(final_data[i])*ohe_mean[i];
   }
-  return ret / total_elts;
+
+  free(ohe_mean);
+  ohe_mean = NULL;
+}
+
+//Return one-hot encoding - allocates memory
+//Ordered by label, then by dimension
+float * one_hot_encoding_mean(const unsigned int * labels, 
+  const unsigned int * possible_labels, const int batchsize, const int num_possible_labels){
+  //float ret = 0.0f;
+  float * result_tmp = (float *) malloc(sizeof(float)*batchsize*num_possible_labels);
+  for(int i = 0; i < num_possible_labels; i++){
+    for(int j = 0; j < batchsize; j++){
+      result[j+(i*batchsize)] = (labels[j] == possible_labels[i])? (1.0f/batchsize) : 0.0f;
+    }
+  }
+  return result_tmp;
 }
 
 
@@ -634,6 +647,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     float * image_data_csv_ptr = input_data;
     unsigned int * data_labels = (unsigned int *) malloc(sizeof(unsigned int) * num_inputs);
     unsigned int * data_labels_ptr = data_labels;
+
+    float * final_data = NULL;
+
     for(unsigned int image_idx = 0; image_idx < num_images_this_batch; image_idx++){
 #ifdef NENCLAVE        
       if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels, num_pixels)){
@@ -757,14 +773,25 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       mask(layer_data[layer_idx], mask_weights, num_neurons, true);
 
       //Activate unmasked result
-      activate(gpu_unmasked_result, gpu_unmasked_h, gpu_unmasked_w);
+      if(layer_idx != num_layers-1){
+        activate(gpu_unmasked_result, gpu_unmasked_h, gpu_unmasked_w);
+      }
+      else{
+        //Softmax
+        softmax(gpu_unmasked_result, gpu_unmasked_h*gpu_unmasked_w);
+      }
 
       //Assign next iteration's input to be the unmasked GPU result
       free(input_data);
       if(layer_idx != num_layers-1){
+        if(input_data != NULL){
+          free(input_data);
+          input_data = NULL;
+        }
         input_data = gpu_unmasked_result;
       }
       else{
+        final_data = gpu_unmasked_result;
         input_data = NULL;
       }
       free(mask_data);
@@ -774,8 +801,11 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     } //layer_idx
 
+    //TODO argmax
 
     //TODO Compute loss
+    //TODO initialize possible labels
+    float batch_loss = my_cross_entropy(final_data, data_labels, possible_labels, layer_data.back().neurons);
 
     //TODO Traverse layers backwards and do backprop
 
