@@ -9,14 +9,14 @@ import time
 import pickle
 input_ = input
 
-from quant import quant_w, quant_act, quant_grad, quant_err, SSE
+from quant import quant_w, quant_act, quant_grad, quant_err, SSE, to_cat
 
 torch.set_default_dtype(torch.float32)
 super_mega_mask = quant_w(pickle.load(open("mask.p", 'rb')).to("cuda:0")) #torch.rand(10000,10000, device = "cuda:0") * 1
 
 def my_cross_entropy(x, y):
-    #x = x - 1
-    log_prob = -1.0 * F.log_softmax(x, 1)
+    log_prob = -1.0 * torch.log(x)
+    # print(((-1/x))/x.shape[0] * to_cat(y, 10, "cuda:0"))
     loss = log_prob.gather(1, y.unsqueeze(1))
     loss = loss.mean()
     return loss
@@ -49,7 +49,7 @@ def SGXFL(input, weight):
     c = a @ b.t()
     # print(c)
 
-    rand_mask = torch.ones(c.shape, device = "cuda:0")
+    rand_mask = super_mega_mask[0:c.shape[0], 0:c.shape[1]]
     # print(c.shape)
     out = softmax(c) #+ rand_mask
 
@@ -72,6 +72,15 @@ def SGXBL(grad_output, input, weight):
     except:
         c = grad_output.clone()
 
+    print(c)
+    print(c.shape)
+    # print(softmax(a @ b.t()))
+    # print(torch.exp(F.log_softmax(softmax(a @ b.t()), 1)) * (1 - torch.exp(F.log_softmax(softmax(a @ b.t()), 1))))
+    # print((softmax(a@b.t()) * 1/(softmax(a@b.t()))))
+    # print((1-0)/(1 - F.log_softmax(softmax(a @ b.t()), 1)))
+    # print(c)
+    # input_()
+
     # print(c.shape, a.shape, b.shape)
 
     # c = c * (1-torch.tanh(a @ b.t())**2)
@@ -82,8 +91,12 @@ def SGXBL(grad_output, input, weight):
     # c[(a @ b.t()) < 0] = 0
     # print(c)
     # a = 1-torch.tanh(a)**2
-    # print(c)
     c = c.reshape(pre_shape)
+    # print(c)
+    # print(softmax(a @ b.t()))
+    # print(c.shape)
+    # print(a @ b.t())
+    # print(c)
     d = c @ b
 
     e = c.t().mm(a)
@@ -345,9 +358,31 @@ class MyFunction2(Function):
             a = input + super_mega_mask[0:input.shape[0], 0:input.shape[1]]
 
         #saves masked input and masked weights for fast backwards gpu pass
+
+        # print(input.shape, weight.shape)
         
+        # a = spc_g.read_matrix_from_enclave()
+        # b = spc_g.read_matrix_from_enclave()
+
         
+        # print("input:", a)
+
+        # print("weight:", b)
+
+        # a = torch.tensor(a)
+        # b = torch.tensor(b)
+
+
+        # c = a @ b
+
+        
+
+        # spc_g.send_to_enclave(c.numpy())
         # rand_mask = torch.ones(input.shape)
+
+        # ctx.save_for_backward(a, b, bias, c)
+
+        # return c
 
         # input = input + rand_mask
         #weight = weight + weight_rand_mask
@@ -405,13 +440,14 @@ class MyFunction2(Function):
 
 
 
+spc_g = SPController()
+spc_g.start(verbose=True)
 
 class LinearAlt(nn.Module):
     def __init__(self, input_features, output_features, bias=True):
         super(LinearAlt, self).__init__()
 
-        # self.spc = SPController()
-        # self.spc.start(verbose=True)
+
         self.spc = None
 
         self.input_features = input_features
