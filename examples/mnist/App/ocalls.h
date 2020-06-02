@@ -77,15 +77,14 @@ int write_stream(void * buf, size_t total_bytes){
   return (res == (int)total_bytes)? 0 : res;
 }
 
+//fclose frees memory
 int close_streams(){
   if(instream != stdin){
     fclose(instream);
-    free(instream);
     instream = NULL;
   }
   if(outstream != stdout){
     fclose(outstream);
-    free(outstream);
     outstream = NULL;
   }
   return 0;
@@ -158,6 +157,7 @@ int read_weight_file(char * filename, size_t num_elements, float * buf){
   }
   long bytes_read = fread(buf, sizeof(float), num_elements, f);
   if(bytes_read*sizeof(float) != (unsigned long) num_elements){
+    fclose(f);
     return 1;
   }
   if(fclose(f)){

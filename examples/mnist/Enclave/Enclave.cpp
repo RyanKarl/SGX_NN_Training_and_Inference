@@ -188,9 +188,10 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
 #endif  
 
   num_inputs = atoi(strtok(str_in, " \n"));
+  batchsize = atoi(strtok(NULL, " \n"));
   num_pixels = atoi(strtok(NULL, " \n"));
   unsigned int num_layers = atoi(strtok(NULL, " \n"));
-  batchsize = atoi(strtok(NULL, " \n"));
+  
   layer_files.reserve(num_layers);
 
   for(unsigned int i = 0; i < num_layers; i++){
@@ -376,41 +377,66 @@ void backwards_demask(const float * input, const int input_width, const int inpu
 
 }
 
-void forward_demask(const float * input, const float * input_masks, 
-  const float * weights, const float * weights_masks, 
-  const int height, const int width, float ** result){
+void forward_demask(const float * input, const int input_height, const int input_width,
+  const float * input_masks, 
+  const float * weights, const int weights_height, const int weights_width,
+  const float * weights_masks,
+  float ** result, int * result_height, int * result_width){
 
-  int total_elts = height*width;
-  float * tmp = (float *) malloc(sizeof(float)*height*width);
-  matrix_sub(weights, weights_masks, total_elts, tmp);
+  assert(input_width == weights_height);
+
+  int weights_elts = weights_height*weights_width;
+  float * tmp = (float *) malloc(sizeof(float)*weights_elts);
+  matrix_sub(weights, weights_masks, weights_elts, tmp);
 
   float * c_d2 = NULL;
   int w_dummy, h_dummy;
   //Transpose argument
+  /*
   float * tmp_transposed = NULL;
-  tmp_transposed = transpose(tmp, width, height);
-
+  tmp_transposed = transpose(tmp, weights_width, weights_height);
+#ifdef NENCLAVE
+  //DEBUG  
+  print_floatarr(tmp_transposed, weights_elts);
+#endif
+*/
   //DEBUG
+  /*
   print_floatarr(tmp, height*width);
   print_floatarr(tmp_transposed, height*width);
+  */
+
+  
+
+  //Swap width and height for tmp, as it's been transposed
+  matrix_multiply(input, input_width, input_height, 
+    tmp, weights_width, weights_height,
+    &c_d2, &w_dummy, &h_dummy, 0);
+
+  float * d3_d = NULL;
+  matrix_multiply(input_masks, input_width, input_height,
+   tmp, weights_width, weights_height,
+   &d3_d, &w_dummy, &h_dummy, 1);
+  
+  matrix_sub(c_d2, d3_d, w_dummy*h_dummy, c_d2);
+  activate(c_d2, h_dummy, w_dummy);
+  matrix_add(c_d2, input_masks, w_dummy*h_dummy, c_d2);
+
+  *result = c_d2;
+  //TODO optimize later
+  *result_width = w_dummy;
+  *result_height = h_dummy;
 
   free(tmp);
   tmp = NULL;
 
-  //Swap width and height
-  matrix_multiply(input, width, height, tmp_transposed, height, width, &c_d2, &w_dummy, &h_dummy, 0);
+  free(d3_d);
+  d3_d = NULL;
 
-  float * d3_d = NULL;
-  matrix_multiply(input_masks, width, height, tmp_transposed, height, width, &d3_d, &w_dummy, &h_dummy, 1);
-  
-  matrix_sub(c_d2, d3_d, total_elts, c_d2);
-  activate(c_d2, height, width);
-  matrix_add(c_d2, input_masks, total_elts, c_d2);
-
-  *result = c_d2;
-
+/*
   free(tmp_transposed);
   tmp_transposed = NULL;
+  */
   free(d3_d);
   d3_d = NULL;
 }
@@ -509,6 +535,8 @@ int receive_from_gpu(float ** result, int * num_neurons, int * batchsize, const 
   }
   return 0;
 }
+
+//NB weights are a COLUMN vector
 
 
 //Need OCALLS for pipe I/O, setup, teardown
@@ -696,16 +724,19 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Unmask (forward) the GPU result
       //Recall that input and weights are currently masked
       float * gpu_unmasked_result = NULL;
-      forward_demask(input_data, mask_data, 
-        layer_data[layer_idx], mask_weights, 
-        num_images_this_batch, num_neurons, &gpu_unmasked_result);
+      int gpu_unmasked_w, gpu_unmasked_h;
+      forward_demask(input_data, num_images_this_batch, num_neurons,
+        mask_data, 
+        layer_data[layer_idx], num_neurons, 1,
+        mask_weights, 
+        &gpu_unmasked_result, &gpu_unmasked_h, &gpu_unmasked_w);
 
       //Undo masking
       //May later just have a seperate buffer for masked weights
       mask(layer_data[layer_idx], mask_weights, num_neurons, true);
 
       //Activate unmasked result
-      activate(gpu_unmasked_result, num_images_this_batch, num_neurons);
+      activate(gpu_unmasked_result, gpu_unmasked_h, gpu_unmasked_w);
 
       //Assign next iteration's input to be the unmasked GPU result
       free(input_data);
@@ -727,6 +758,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     //TODO Traverse layers backwards and do backprop
 
+    //Free up labels
+    free(data_labels);
+    data_labels = NULL;
 
   } //batch_idx
 
