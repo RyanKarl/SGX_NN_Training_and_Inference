@@ -91,7 +91,7 @@ int close_streams(){
 }
 
 
-int csv_getline(char * csv_filename, float * vals, char * label, size_t num_vals){
+int csv_getline(char * csv_filename, float * vals, unsigned int * label, size_t num_vals){
   static std::ifstream ifs(csv_filename);
   if(!ifs.good()){
     return 1;

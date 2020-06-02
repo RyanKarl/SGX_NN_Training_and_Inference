@@ -441,6 +441,25 @@ void forward_demask(const float * input, const int input_height, const int input
   d3_d = NULL;
 }
 
+//Return one-hot encoding - allocates memory
+//Ordered by label
+float one_hot_encoding_mean(const unsigned int * labels, 
+  const unsigned int * labels_to_test, const int total_elts, const int num_possible_labels){
+  float ret = 0.0f;
+  unsigned char * result_tmp = (unsigned char *) malloc(sizeof(unsigned char)*total_elts);
+  for(int i = 0; i < total_elts; i++){
+    result[i] = 1;
+    for(int j = 0; j < num_possible_labels; j++){
+      result[i] ^= (labels[i] == labels_to_test[j]);
+    }
+    ret += result[i];
+  }
+  return ret / total_elts;
+}
+
+
+
+
 void update_weights(float * weights, const float * weights_gradient, int total_elts, float learning_rate){
   for(int i = 0; i < total_elts; i++){
     weights[i] -= learning_rate*weights_gradient[i];
@@ -613,7 +632,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     unsigned num_images_this_batch = (batch_idx == num_batches-1) ? (num_inputs / num_batches) : (num_inputs % num_batches);
     input_data = (float *) malloc(sizeof(float) * num_images_this_batch * num_pixels);
     float * image_data_csv_ptr = input_data;
-    char * data_labels = (char *) malloc(sizeof(unsigned char) * num_inputs);
+    unsigned int * data_labels = (unsigned int *) malloc(sizeof(unsigned int) * num_inputs);
+    unsigned int * data_labels_ptr = data_labels;
     for(unsigned int image_idx = 0; image_idx < num_images_this_batch; image_idx++){
 #ifdef NENCLAVE        
       if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels, num_pixels)){
@@ -621,7 +641,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         return 1;
       }
 #else
-      ocall_status = csv_getline(&ocall_ret, input_csv_filename, image_data_csv_ptr, &data_labels, num_pixels);
+      ocall_status = csv_getline(&ocall_ret, input_csv_filename, image_data_csv_ptr, &data_labels_ptr, num_pixels);
       if(ocall_ret){
         print_out((char *) &("Failed to read input .csv"[0]), true);
         return 1;
@@ -631,6 +651,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out((char *) &("Read input from file"[0]), false);
       }
       image_data_csv_ptr += num_pixels; //Increment pointer
+      data_labels_ptr++;
     }
 
     
