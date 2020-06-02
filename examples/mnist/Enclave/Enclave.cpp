@@ -101,11 +101,7 @@ int frievald(float * a, float * b, float * c,
 
   for (int i = 0; i < c_width; i++){
     //cout << "axbr[" << i << "] " << axbr[i] << " cr[" << i << "] " << cr[i] << endl;
-    if (FLOAT_CMP(axbr[i], cr[i])){
-    //DEBUG      
-#ifdef NENCLAVE
-      cout << "i: " << i << " axbr: " << axbr[i] << " cr: " << cr[i] << endl;
-#endif      
+    if (FLOAT_CMP(axbr[i], cr[i])){    
         free(axbr);
         free(cr);
         axbr = cr = NULL;

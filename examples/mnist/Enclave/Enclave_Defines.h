@@ -12,7 +12,10 @@
 
 # define FLOAT_TOLERANCE 1e-3
 
-# define INDEX_FLOATMAT(f, i, j, n) (f[(i*n)+(j)])
+//Index in row-major order
+//i indexes width, j indexes height
+//Last arg. should be width
+# define INDEX_FLOATMAT(f, i, j, n) (f[(j*n)+(i)])
 //Assumes f is a char *
 # define INDEX_BITARR(f, i) (( (f[i / CHAR_BIT]) >> (i%CHAR_BIT)) & 1)
 # define FLOAT_CMP(a, b) (abs(a - b) >= FLOAT_TOLERANCE)

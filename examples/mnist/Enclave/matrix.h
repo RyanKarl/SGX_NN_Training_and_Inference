@@ -34,32 +34,24 @@ void matrix_multiply(const float * a, const int a_width, const int a_height,
   
   if(!negate){
     for(int i = 0; i < a_height; i++){
-      //printf("i %d\n", i);
       for(int j = 0; j < b_width; j++){
-        //printf("\tj %d\n", j);
-        INDEX_FLOATMAT((*c), i, j, (*c_width)) = 0.0f;
+        (*c)[(i*(*c_width))+j] = 0.0f;
         for(int k = 0; k < a_width; k++){
-          //printf("\t\tk %d\n", k);
-          //printf("\t\t a %f b %f\n", INDEX_FLOATMAT(a, i, k, a_width), INDEX_FLOATMAT(b, k, j, b_width));
-          INDEX_FLOATMAT((*c), i, j, (*c_width)) += INDEX_FLOATMAT(a, i, k, a_width)*INDEX_FLOATMAT(b, k, j, b_width);
+          (*c)[(i*(*c_width))+j] += a[(i*a_width)+k] * b[(k*b_width)+j];
         }
       }
     }
   }
   else{
     for(int i = 0; i < a_height; i++){
-      //printf("i %d\n", i);
       for(int j = 0; j < b_width; j++){
-        //printf("\tj %d\n", j);
-        INDEX_FLOATMAT((*c), i, j, (*c_width)) = 0.0f;
+        (*c)[(i*(*c_width))+j] = 0.0f;
         for(int k = 0; k < a_width; k++){
-          //printf("\t\tk %d\n", k);
-          //printf("\t\t a %f b %f\n", INDEX_FLOATMAT(a, i, k, a_width), INDEX_FLOATMAT(b, k, j, b_width));
-          INDEX_FLOATMAT((*c), i, j, (*c_width)) -= INDEX_FLOATMAT(a, i, k, a_width)*INDEX_FLOATMAT(b, k, j, b_width);
+          (*c)[(i*(*c_width))+j] -= a[(i*a_width)+k] * b[(k*b_width)+j];
         }
       }
     }
-  }
+  }  
   
   return;
 }
@@ -98,7 +90,7 @@ float * transpose(const float * x, const int width, const int height){
   float * ret = (float *) malloc(sizeof(float) * width * height);
   for(int i = 0; i < width; i++){
     for(int j = 0; j < height; j++){
-      INDEX_FLOATMAT(ret, j, i, width) = INDEX_FLOATMAT(x, i, j, width);
+      INDEX_FLOATMAT(ret, j, i, height) = INDEX_FLOATMAT(x, i, j, width);
     }
   }
   return ret;
