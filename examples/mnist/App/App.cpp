@@ -243,9 +243,10 @@ int main(int argc, char ** argv){
   char * input_csv_filename = NULL;
   char * weights_outfile = NULL;
   int verbose = 0;
+  int backprop = 0;
 
   char c;
-  while((c = getopt(argc, argv, "s:c:i:o:vw:")) != -1){
+  while((c = getopt(argc, argv, "s:c:i:o:vw:b")) != -1){
     switch(c){
       case 'v':{
         verbose += 1;
@@ -269,6 +270,10 @@ int main(int argc, char ** argv){
       }
       case 'w':{
         weights_outfile = optarg;
+        break;
+      }
+      case 'b':{
+        backprop = 1;
         break;
       }
       default:{

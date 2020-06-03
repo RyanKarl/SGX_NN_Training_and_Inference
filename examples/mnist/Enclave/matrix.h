@@ -73,10 +73,15 @@ int activate(float * data, int height, int width){
   return 0;
 }
 
-float * transform(const float * x, const float * term, const int width, const int height){
+float * transform(const float * x, const float * term, const int width, const int height, const int use_softmax){
   float * difference = (float *) malloc(sizeof(float) * width * height);
   matrix_sub(x, term, width*height, difference);
-  activate(difference, width, height);
+  if(!use_softmax){
+    activate(difference, width, height);
+  }
+  else{
+    softmax(difference, width*height);
+  }
   float * squared;
   int p_w, p_h;
   matrix_multiply(difference, width, height, difference, width, height, &squared, &p_w, &p_h, 0);
@@ -155,8 +160,8 @@ float * softmax_derivative(float * y, const int n){
   return y_squared;
 }
 
-unsigned int argmax(float * data, int total_elts){
-  unsigned int idx = 0;
+int argmax(float * data, int total_elts){
+  int idx = 0;
   float max_data = data[0];
   for(int i = 0; i < total_elts; i++){
     if(data[i] > max_data){

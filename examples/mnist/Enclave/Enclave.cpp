@@ -289,17 +289,18 @@ void print_layer_info(const vector<layer_file_t> & layers){
 
 
 void backwards_demask(const float * input, const int input_width, const int input_height,
-    const float * input_mask, const int input_mask_width, const int input_mask_height,
+    const float * input_mask, 
     const float * outputs, const int outputs_width, const int outputs_height,
     const float * weights, const int weights_width, const int weights_height,
-    const float * weights_mask, const int weights_mask_width, const int weights_mask_height,
+    const float * weights_mask, 
     const float * grad_output, const int grad_output_width, const int grad_output_height,
-    const float * grad_mask, const int grad_mask_width, const int grad_mask_height,
+    const float * grad_mask, 
+    const int use_softmax,
     float ** d_ret, float ** e_ret){
   //Calculate weight_rand_mask - b
-  float * diff3_diff = (float *) malloc(sizeof(float) * input_mask_width * weights_height);
+  float * diff3_diff = (float *) malloc(sizeof(float) * input_width * weights_height);
   float * weights_transpose = transpose(weights, weights_width, weights_height);
-  float * weights_mask_transpose = transpose(weights_mask, weights_mask_width, weights_mask_height);
+  float * weights_mask_transpose = transpose(weights_mask, weights_width, weights_height);
   matrix_sub(weights_mask_transpose, weights_transpose, weights_width*weights_height, diff3_diff);
   int diff_w, diff_h;
   float * diff_tmp;
@@ -309,7 +310,7 @@ void backwards_demask(const float * input, const int input_width, const int inpu
 
   float * diff2;
   matrix_multiply(input, input_width, input_height, 
-    weights_mask_transpose, weights_mask_height, weights_mask_width, //Swap height and weights here
+    weights_mask_transpose, weights_height, weights_width, //Swap height and weights here
     &diff2, &diff_w, &diff_h, 0);
   matrix_sub(diff_tmp, diff2, diff_w * diff_h, diff_tmp);
 
@@ -323,7 +324,7 @@ void backwards_demask(const float * input, const int input_width, const int inpu
   diff3_diff = NULL;
 
   //diff_tmp now holds diff3-diff-diff2
-  float * grad_rand_mask_transformed = transform(grad_mask, diff_tmp, diff_w, diff_h);
+  float * grad_rand_mask_transformed = transform(grad_mask, diff_tmp, diff_w, diff_h, use_softmax);
   float * weight_mask_weights = (float *) malloc(sizeof(float) * grad_output_width * weights_height);
   matrix_sub(weights, weights_mask, grad_output_width * weights_height, weight_mask_weights);
   int d_diffb_w, d_diffb_h;
@@ -442,10 +443,10 @@ void forward_demask(const float * input, const int input_height, const int input
 }
 
 
-/*
-//TODO fix dimensions
 
-//final_data is the softmax'd unmasked last GPU-multiplied matrix, i.e. x
+//TODO fix dimensions
+/*
+//final_data is the softmax'd unmasked last GPU-multiplied matrix, i.e. x, with size of batchsize*num_possible_labels
 float my_cross_entropy_forward(const float * final_data, const int batchsize,
   const unsigned int * data_labels, const unsigned int * possible_labels, const int num_possible_labels){
   float * ohe_mean = one_hot_encoding_mean(data_labels, possible_labels, num_possible_labels);
@@ -460,6 +461,21 @@ float my_cross_entropy_forward(const float * final_data, const int batchsize,
   ohe_mean = NULL;
 }
 
+//https://stackoverflow.com/questions/50999977/what-does-the-gather-function-do-in-pytorch-in-layman-terms
+float * gather_1d(const float * data, const int data_elts, 
+  const float * indices, const int indices_h, const int indices_w){
+  float * ret = (float *) malloc(indices_h*indices_w);
+  for(int h_idx = 0; h_idx < indices_h; h_idx++){
+    for(int w_idx = 0; w_idx < indices_w; w_idx++){
+      int index_idx = (h_idx*indices_w)+w_idx; //Index into the index - naming intentionally bad
+      assert(index_idx >= 0 && index_idx < data_elts);
+      ret[index_idx] = data[indices[index_idx]];
+    }
+  }
+  return ret;
+}
+*/
+
 //Return one-hot encoding - allocates memory
 //Ordered by label, then by dimension
 float * one_hot_encoding_mean(const unsigned int * labels, 
@@ -472,16 +488,38 @@ float * one_hot_encoding_mean(const unsigned int * labels,
     }
   }
   //One or the other of these constructs
+  /*
   for(int i = 0; i < num_possible_labels; i++){
     for(int j = 0; j < batchsize; j++){
       result[j+(i*batchsize)] = (labels[j] == possible_labels[i])? (1.0f/batchsize) : 0.0f;
     }
   }
-  
+  */
   return result_tmp;
 }
 
-*/
+//Actual is ground truth - 0 or 1 for each label
+float crossentropy_loss(const unsigned int * actual, const float * predicted,
+ const int num_possible_labels, const int batchsize){
+  float sum = 0.0f;
+  for(int i = 0; i < batchsize; i++){
+    assert(actual[i] < num_possible_labels);
+    sum -= log(predicted[(i*num_possible_labels)+actual[i]]);
+  }
+  return sum/batchsize;
+}
+
+//Allocates memory
+float * crossentropy_derivative(const unsigned int * actual, const float * predicted,
+ const int num_possible_labels, const int batchsize){
+  float * ret = (float *) calloc(batchsize*num_possible_labels, sizeof(float));
+  for(int i = 0; i < batchsize; i++){
+    int idx = (i*num_possible_labels)+actual[i];
+    ret[idx] = (-1.0f/predicted[idx])/batchsize;
+  }
+  return ret;
+}
+
 
 
 
@@ -592,13 +630,14 @@ int receive_from_gpu(float ** result, int * num_neurons, int * batchsize, const 
 
 //Need OCALLS for pipe I/O, setup, teardown
 int enclave_main(char * network_structure_fname, char * input_csv_filename, 
-  char * inpipe_fname, char * outpipe_fname, char * weights_outfile, int verbose){
+  char * inpipe_fname, char * outpipe_fname, char * weights_outfile, int backprop, int verbose){
 
   unsigned int num_layers;
   vector<layer_file_t> layer_files;
   unsigned int num_inputs = 0;
-  unsigned int batchsize = 0; //TODO initialize
+  unsigned int batchsize = 0; 
   unsigned int num_pixels = 0;
+  unsigned int num_possible_labels = 0; //TODO initialize
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -668,7 +707,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     unsigned int * data_labels_ptr = data_labels;
 
     float * final_data = NULL;
-    if(final_data){} //Only for compilation
+    
 
     for(unsigned int image_idx = 0; image_idx < num_images_this_batch; image_idx++){
 #ifdef NENCLAVE        
@@ -821,23 +860,113 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     } //layer_idx
 
-    //TODO argmax
+    //max_indices[i] stores the ith input's final prediction
+    //Is this necessary?
+    /*
+    unsigned int * max_indices = (unsigned int *) malloc(sizeof(unsigned int) * num_possible_labels);
+    for(int i = 0; i < num_possible_labels; i++){
+      max_indices[i] = argmax(final_data+(i*num_possible_labels), num_possible_labels);
+    }
+    */
+    if(backprop){
+        //Loss for the whole batch
+      float batch_loss = crossentropy_loss(data_labels, final_data, num_possible_labels, num_images_this_batch);
+      float * derivative = crossentropy_derivative(data_labels, final_data, num_possible_labels, num_images_this_batch);
 
-    //TODO Compute loss
-    //TODO initialize possible labels
-    //float batch_loss = my_cross_entropy(final_data, data_labels, possible_labels, layer_data.back().neurons);
+      //TODO Traverse layers backwards and do backprop
+      for(int rev_layer_idx = num_layers-1; rev_layer_idx >= 0; rev_layer_idx--){
+        //Mask matrices to send to GPU
+        float * rev_mask_input = (float *) malloc(sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
+        float * rev_mask_weights = (float *) malloc(sizeof(float)*layer_files[rev_layer_idx].neurons);
+        float * deriv_mask = (float *) malloc(sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
+        rand_bytes(rev_mask_input, sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
+        rand_bytes(rev_mask_weights, sizeof(float)*layer_files[rev_layer_idx].neurons);
+        rand_bytes(deriv_mask, sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
+        //final_data now used for the next level
+        mask(final_data, rev_mask_input, num_images_this_batch*layer_files[rev_layer_idx].neurons, 0);
+        mask(layer_data[layer_idx], rev_mask_weights, layer_files[rev_layer_idx].neurons, 0);
+        mask(derivative, deriv_mask, num_images_this_batch*layer_files[rev_layer_idx].neurons, 0);
+        //Send out to GPU
+        if(send_to_gpu(final_data, num_images_this_batch, layer_files[rev_layer_idx].neurons, verbose)){
+          print_out((char *) &("Failed to send input data (backprop)"[0]), true);
+          return 1;
+        }
+        if(send_to_gpu(layer_data[layer_idx], 1, layer_files[rev_layer_idx].neurons, verbose)){
+          print_out((char *) &("Failed to send weights (backprop)"[0]), true);
+          return 1;
+        }
+        if(send_to_gpu(derivative, num_images_this_batch, layer_files[rev_layer_idx].neurons, verbose)){
+          print_out((char *) &("Failed to send derivative (backprop)"[0]), true);
+          return 1;
+        }
 
-    //TODO Traverse layers backwards and do backprop
+        //Receive back
+        float * gpu_derivative = NULL;
+        int deriv_neurons, deriv_batchsize;
+        if(receive_from_gpu(&gpu_derivative, &deriv_neurons, &deriv_batchsize, verbose)){
+          print_out((char *) &("Failed to receive backprop. result from GPU"[0]), true);
+          return 1;
+        }
 
-    //Free up labels
-    free(data_labels);
-    data_labels = NULL;
+        float * gpu_weights_update = NULL;
+        int update_neurons, update_batchsize;
+        if(receive_from_gpu(&gpu_weights_update, &update_neurons, &update_batchsize, verbose)){
+          print_out((char *) &("Failed to receive weights update from GPU"[0]), true);
+          return 1;
+        }
+        assert(update_neurons == layer_files[rev_layer_idx].neurons);
+        assert(update_batchsize == 1);
+        assert(deriv_neurons == layer_files[rev_layer_idx].neurons);
+        assert(deriv_batchsize == num_images_this_batch);
 
+        //TODO verify with Frievalds' algorithm
+
+        float * e_weights;
+        float * d_derivative;
+
+        //TODO figure out args for backwards demasking 
+        backwards_demask(const float * input, const int input_width, const int input_height,
+          const float * input_mask, 
+          const float * outputs, const int outputs_width, const int outputs_height,
+          const float * weights, const int weights_width, const int weights_height,
+          const float * weights_mask, 
+          const float * grad_output, const int grad_output_width, const int grad_output_height,
+          const float * grad_mask, 
+          rev_layer_idx == (num_layers-1),
+          &d_derivative, &e_weights);
+
+        //TODO update this layer's weights
+
+        //TODO set up things for next loop
+
+
+        free(rev_mask_input);
+        rev_mask_input = NULL;
+        free(rev_mask_weights);
+        rev_mask_weights = NULL;
+        free(deriv_mask);
+        deriv_mask = NULL;
+        free(gpu_backprop_result);
+        gpu_backprop_result = NULL;
+        free(gpu_weights_update);
+        gpu_weights_update = NULL;
+      }
+
+      //Free up labels
+      free(data_labels);
+      data_labels = NULL;
+
+      free(derivative);
+      derivative = NULL;
+
+
+    } //rev_layer_idx
+    
   } //batch_idx
 
 
   //Write weights back to file
-  if(weights_out_str != ""){
+  if((weights_out_str != "") && backprop){
     for(size_t i = 0; i < layer_files.size(); i++){
       string idx_str = std::to_string(i);
       string full_name = weights_out_str + idx_str;

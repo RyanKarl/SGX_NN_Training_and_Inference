@@ -35,7 +35,7 @@ height width filename type
 
 
 
-int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, char * weights_outfile, int verbose);
+int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, char * weights_outfile, int backprop, int verbose);
 
 void mask(float * data, int len, float * mask_data);
 
