@@ -847,7 +847,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         return 1;
       }
 #else
-      ocall_status = floats_to_csv(&ocall_ret, full_name, layer_files[i].neurons, layer_data[i]);
+      ocall_status = floats_to_csv(&ocall_ret, &(full_name.c_str()[0]), layer_files[i].neurons, layer_data[i]);
       if(ocall_ret){
         print_out((char *) &("Failed writing .csv out"[0]), true);
         return 1;
