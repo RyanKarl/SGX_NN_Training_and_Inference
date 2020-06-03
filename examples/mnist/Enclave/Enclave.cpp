@@ -513,6 +513,9 @@ int send_to_gpu(const float * data, const int batchsize, const int num_neurons, 
     return 1;
   }
 #else
+  sgx_status_t ocall_status;
+  int ocall_ret;
+
   ocall_status = write_stream(&ocall_ret, (void *) out_dims, sizeof(out_dims));
   if(ocall_ret){
     print_out((char *) &("Failed writing input dimensions"[0]), true);
@@ -548,6 +551,9 @@ int receive_from_gpu(float ** result, int * num_neurons, int * batchsize, const 
     return 1;
   }
 #else
+  sgx_status_t ocall_status;
+  int ocall_ret;
+
   ocall_status = read_stream(&ocall_ret, (void *) in_dims, sizeof(in_dims));
   if(ocall_ret){
     print_out((char *) &("Failed reading in result dimensions"[0]), true);
@@ -666,12 +672,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     for(unsigned int image_idx = 0; image_idx < num_images_this_batch; image_idx++){
 #ifdef NENCLAVE        
-      if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels, num_pixels)){
+      if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels)){
         print_out((char *) &("Failed to read input .csv"[0]), true);
         return 1;
       }
 #else
-      ocall_status = csv_getline(&ocall_ret, input_csv_filename, image_data_csv_ptr, &data_labels_ptr, num_pixels);
+      ocall_status = csv_getline(&ocall_ret, input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels);
       if(ocall_ret){
         print_out((char *) &("Failed to read input .csv"[0]), true);
         return 1;
