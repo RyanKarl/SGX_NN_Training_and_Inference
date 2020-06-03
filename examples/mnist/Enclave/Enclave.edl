@@ -62,7 +62,7 @@ enclave {
 num_elements, [out, size=num_elements] float * buf);
         int read_weight_file_plain([in, string] char * filename, size_t
 bufsize, [out, size=bufsize] float * buf);
-        int floats_to_csv([out, string] char * fname, size_t num_elts, [out, size=num_elts] float * data);
+        int floats_to_csv([in, string] char * fname, size_t num_elts, [in, size=num_elts] float * data);
     };
     
 
