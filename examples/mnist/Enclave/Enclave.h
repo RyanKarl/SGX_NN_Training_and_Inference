@@ -45,7 +45,7 @@ int init_streams(char * inpipe_fname, char * outpipe_fname);
 int read_stream(void * buf, size_t total_bytes);
 int write_stream(void * buf, size_t total_bytes);
 int close_streams();
-int csv_getline(char * input_csv_name, float * vals, char * label, size_t num_vals);
+int csv_getline(char * input_csv_name, float * vals, unsigned int * label, size_t num_vals);
 void print_out(char * msg, int error);
 int file_to_string(char * fname, char * out, size_t str_buf_len);
 int read_weight_file(char * filename, size_t num_elements, float * buf);
