@@ -160,7 +160,7 @@ unsigned int argmax(float * data, int total_elts){
   float max_data = data[0];
   for(int i = 0; i < total_elts; i++){
     if(data[i] > max_data){
-      max_data = data[i]
+      max_data = data[i];
       idx = i;
     }
   }
