@@ -40,7 +40,7 @@ enclave {
      */
     
     trusted {
-        public int enclave_main([in, string] char * network_structure_fname, [in, string] char * input_csv_filename, [in, string] char * inpipe_fname, [in, string] char * outpipe_fname, int verbose);
+        public int enclave_main([in, string] char * network_structure_fname, [in, string] char * input_csv_filename, [in, string] char * inpipe_fname, [in, string] char * outpipe_fname, [in, string] char * weights_outfile int verbose);
     };
 
     /* 

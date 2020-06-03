@@ -441,6 +441,8 @@ void forward_demask(const float * input, const int input_height, const int input
   d3_d = NULL;
 }
 
+//TODO fix dimensions
+
 //final_data is the softmax'd unmasked last GPU-multiplied matrix, i.e. x
 float my_cross_entropy_forward(const float * final_data, const int batchsize,
   const unsigned int * data_labels, const unsigned int * possible_labels, const int num_possible_labels){
@@ -462,11 +464,18 @@ float * one_hot_encoding_mean(const unsigned int * labels,
   const unsigned int * possible_labels, const int batchsize, const int num_possible_labels){
   //float ret = 0.0f;
   float * result_tmp = (float *) malloc(sizeof(float)*batchsize*num_possible_labels);
+  for(int j = 0; j < batchsize; j++){
+    for(int i = 0; i < num_possible_labels; i++){
+      result[i+(j*num_possible_labels)] = (labels[j] == possible_labels[i])? (1.0f/batchsize) : 0.0f;
+    }
+  }
+  /*
   for(int i = 0; i < num_possible_labels; i++){
     for(int j = 0; j < batchsize; j++){
       result[j+(i*batchsize)] = (labels[j] == possible_labels[i])? (1.0f/batchsize) : 0.0f;
     }
   }
+  */
   return result_tmp;
 }
 
