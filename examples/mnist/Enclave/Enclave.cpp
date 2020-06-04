@@ -914,11 +914,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       float batch_loss = crossentropy_loss(data_labels, final_data, num_possible_labels, num_images_this_batch);
       float * derivative = crossentropy_derivative(data_labels, final_data, num_possible_labels, num_images_this_batch);
 
+      //Print output
+      if(verbose >= 1){
+        std::string loss_str = "Loss this batch: " + std::to_string(batch_loss);
+        print_out((char *) loss_str.c_str()[0], false);
+      }
+
       //TODO Traverse layers backwards and do backprop
       for(int rev_layer_idx = num_layers-1; rev_layer_idx >= 0; rev_layer_idx--){
 
         if(rev_layer_idx == num_layers-1){
-          //Call backwards demasking
+          //TODO Call backwards demasking for softmax
 
           continue;
         }
@@ -967,6 +973,35 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         assert(deriv_neurons == layer_files[rev_layer_idx].neurons);
         assert(deriv_batchsize == num_images_this_batch);
 
+        //Also read back this layer's feed-forward output from the GPU for convenience
+        float * layer_forward_data;
+        int fwd_w, fwd_h;
+        if(receive_from_gpu(&layer_forward_data, &fwd_w, &fwd_h, verbose)){
+          print_out((char *) &("Failed to receive feed-forward data from GPU"[0]), true);
+          return 1;
+        }
+        float * output_data;
+        int output_w, output_h;
+        if(receive_from_gpu(&output_data, &output_w, &output_h, verbose)){
+          print_out((char *) &("Failed to receive output data from GPU"[0]), true);
+          return 1;
+        }
+        float * weights_mask;
+        int weigths_mask_w, weights_mask_h;
+        if(receive_from_gpu(&weights_mask, &weigths_mask_w, &weights_mask_h, verbose)){
+          print_out((char *) &("Failed to receive weights mask data from GPU"[0]), true);
+          return 1;
+        }        
+        float * grad_mask;
+        int grad_mask_w, grad_mask_h;
+        if(receive_from_gpu(&grad_mask, &grad_mask_w, &grad_mask_h, verbose)){
+          print_out((char *) &("Failed to receive gradient mask data from GPU"[0]), true);
+          return 1;
+        }
+        assert(weights_mask_w == 1);
+        assert(weights_mask_h == layer_files[rev_layer_idx].neurons);
+
+
         //Verify with Frievalds' algorithm
         //Need to verify 2 multiplications
         if(frievald(final_data, layer_data[rev_layer_idx], gpu_derivative, 
@@ -980,24 +1015,29 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           return 1;
         }
 
-
         float * e_weights;
         float * d_derivative;
 
-        //TODO figure out args for backwards demasking 
-        backwards_demask(const float * input, const int input_width, const int input_height,
-          const float * input_mask, 
-          const float * outputs, const int outputs_width, const int outputs_height,
-          const float * weights, const int weights_width, const int weights_height,
-          const float * weights_mask, 
-          const float * grad_output, const int grad_output_width, const int grad_output_height,
-          const float * grad_mask, 
-          rev_layer_idx == (num_layers-1),
+        //Figure out args for backwards demasking 
+        backwards_demask_ordinary(layer_forward_data, fwd_w, fwd_h,
+          rev_mask_input, 
+          output_data, output_w, output_h,
+          layer_data[rev_layer_idx], layer_files[rev_layer_idx+1].neurons, layer_files[rev_layer_idx].neurons,
+          weights_mask, 
+          derivative, output_w, output_h,
+          grad_mask, 
           &d_derivative, &e_weights);
 
         //TODO update this layer's weights
 
         //TODO set up things for next loop
+
+
+
+        free(e_weights);
+        e_weights = NULL;
+        free(d_derivative);
+        d_derivative = NULL;
 
 
         free(rev_mask_input);
@@ -1021,6 +1061,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
 
     } //rev_layer_idx
+
+
     
   } //batch_idx
 
