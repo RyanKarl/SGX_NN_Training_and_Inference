@@ -916,6 +916,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
       //TODO Traverse layers backwards and do backprop
       for(int rev_layer_idx = num_layers-1; rev_layer_idx >= 0; rev_layer_idx--){
+
+        if(rev_layer_idx == num_layers-1){
+          //Call backwards demasking
+
+          continue;
+        }
+
         //Mask matrices to send to GPU
         float * rev_mask_input = (float *) malloc(sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
         float * rev_mask_weights = (float *) malloc(sizeof(float)*layer_files[rev_layer_idx].neurons);
@@ -932,7 +939,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           print_out((char *) &("Failed to send input data (backprop)"[0]), true);
           return 1;
         }
-        if(send_to_gpu(layer_data[layer_idx], 1, layer_files[rev_layer_idx].neurons, verbose)){
+        if(send_to_gpu(layer_data[rev_layer_idx], 1, layer_files[rev_layer_idx].neurons, verbose)){
           print_out((char *) &("Failed to send weights (backprop)"[0]), true);
           return 1;
         }
@@ -960,10 +967,18 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         assert(deriv_neurons == layer_files[rev_layer_idx].neurons);
         assert(deriv_batchsize == num_images_this_batch);
 
-        //TODO verify with Frievalds' algorithm
+        //Verify with Frievalds' algorithm
         //Need to verify 2 multiplications
-
-
+        if(frievald(final_data, layer_data[rev_layer_idx], gpu_derivative, 
+          num_images_this_batch, layer_files[rev_layer_idx].neurons, layer_files[rev_layer_idx].neurons, 1, num_images_this_batch, 1)){
+          print_out((char *) &("Frievalds' algorithm failed on prod. of final_data and layer_data"), true);
+          return 1;
+        }
+        if(frievald(final_data, derivative, gpu_weights_update, 
+          num_images_this_batch, layer_files[rev_layer_idx].neurons, layer_files[rev_layer_idx].neurons, 1, num_images_this_batch, num_images_this_batch)){
+          print_out((char *) &("Frievalds' algorithm failed on prod. of final_data and derivative"), true);
+          return 1;
+        }
 
 
         float * e_weights;
