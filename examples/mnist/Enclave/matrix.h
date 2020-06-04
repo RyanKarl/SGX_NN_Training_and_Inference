@@ -21,7 +21,7 @@ void matrix_sub(const float * a, const float * b, int elts, float * result){
 //Allocates memory
 void matrix_multiply(const float * a, const int a_width, const int a_height,
     const float * b, const int b_width, const int b_height, 
-    float ** c, int * c_width, int * c_height, const int negate=0){
+    float ** c, int * c_width, int * c_height, const int negate=0, const int alloc_new=1){
   assert(a_width == b_height);
   assert(a_height > 0);
   assert(a_width > 0);
@@ -30,7 +30,9 @@ void matrix_multiply(const float * a, const int a_width, const int a_height,
 
   *c_width = b_width;
   *c_height = a_height;
-  *c = (float *) malloc(sizeof(float)*(*c_width)*(*c_height));
+  if(alloc_new){
+    *c = (float *) malloc(sizeof(float)*(*c_width)*(*c_height));
+  }
   
   if(!negate){
     for(int i = 0; i < a_height; i++){
@@ -69,6 +71,14 @@ int activate(float * data, int height, int width){
   }
   for(int i = 0; i < height * width; i++){
     data[i] = tanh(data[i]);
+  }
+  return 0;
+}
+
+int activate_derivative(float * data, int total_elts){
+  for(int i = 0; i < total_elts; i++){
+    float tmp = tanh(data[i]);
+    data[i] = 1.0f - (tmp*tmp);
   }
   return 0;
 }
@@ -139,13 +149,13 @@ void softmax(float * x, const int total_elts){
 
 //https://stats.stackexchange.com/questions/215521/how-to-find-derivative-of-softmax-function-for-the-purpose-of-gradient-descent/328095
 //Returns a pointer to dynamically freed memory
-float * softmax_derivative(float * y, const int n){
+void softmax_derivative(float * y, const int n, float * y_squared){
   //First, create the identity matrix
-  float * y_squared;
+  //float * y_squared;
   int y_sq_h, y_sq_w;
   matrix_multiply(y, 1, n,
     y, n, 1, 
-    &y_squared, &y_sq_w, &y_sq_h, 0);
+    y_squared, &y_sq_w, &y_sq_h, 0, 0);
 #ifdef DEBUG  
   assert(y_sq_w == n);
   assert(y_sq_h == n);
@@ -157,8 +167,23 @@ float * softmax_derivative(float * y, const int n){
        y[j] - INDEX_FLOATMAT(y_squared, i, j, n);
     }
   }
-  return y_squared;
+  return;
 }
+
+/*
+float * softmax_derivative(float * s, 
+  const int num_vectors, const int vector_height){
+  float * ret = (float *) calloc(num_vectors*vector_height*vector_height, sizeof(float));
+  //Index ret as a list of square matrices
+  for(int i = 0; i < num_vectors; i++){
+    for(int j = 0; j < vector_height; j++){
+      ret[(i*vector_height*vector_height)+(j*num_vectors)+j] = s[(i*vector_height) + j];
+    }
+  }
+  //ret now holds the diagonal embedding in a 3d matrix
+
+}
+*/
 
 int argmax(float * data, int total_elts){
   int idx = 0;

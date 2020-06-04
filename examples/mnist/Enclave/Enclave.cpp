@@ -285,17 +285,58 @@ void print_layer_info(const vector<layer_file_t> & layers){
 
 //For inputs: read in entire batches to enclave memory from ordinary file through OCALLs, and free() data when done.
 
+void backwards_demask_lastlayer(const float * input, const int input_width, const int input_height,
+    //const float * input_masks,
+    const float * final_data, const int final_data_width, const int final_data_height,
+    const float * weights, const int weights_width, const int weights_height,
+    //const float * weights_masks,
+    const float * grad_output, const int grad_output_width, const int grad_output_height
+    float ** d_ret
+    //int * re_w, int * ret_w
+    ){
+  //final_data is softmax(a*b.t)
+  //take the derivative of that term
+  float * grad_output_transposed = transpose(grad_output, grad_output_width, grad_output_height)
+  float * soft_der = (float *) malloc(sizeof(float) * input_height * input_width * input_width);
+  float * c_prod = (float *) malloc(sizeof(float) * input_width * input_height);
+  for(int i = 0; i < input_height; i++){
+    softmax_derivative(input + (i*input_width), input_width,
+     doft_der + (i*input_width*input_width)); 
+    //Now multiply
+    matrix_multiply(grad_output_transposed + (i*grad_output_width), 1, grad_output_height,
+    soft_der, input_width, input_width, //Same args for w and h intentional
+    &(c_prod + (i*input_width)), input_width, input_height, 0, 0);
+  }
+
+  free(grad_output_transposed);
+  grad_output_transposed = NULL;
+  free(soft_der);
+  soft_der = NULL;
+
+  //*d_ret = (float *) malloc(sizeof(float *) * input_height * weights_height);
+  
+  //Transpose b
+  float * b_transpose = tranpose(weights, weights_width, weights_height);
+
+  int d_w, d_h;
+  matrix_multiply(c_prod, input_width, input_height,
+    b_transpose, weight_height, weights_width,
+    *d_ret, d_w, d_h, 0);
+
+  free(b_transpose);
+  b_transpose = NULL;
+  free(c_prod);
+  c_prod = NULL;
+}
 
 
-
-void backwards_demask(const float * input, const int input_width, const int input_height,
+void backwards_demask_ordinary(const float * input, const int input_width, const int input_height,
     const float * input_mask, 
     const float * outputs, const int outputs_width, const int outputs_height,
     const float * weights, const int weights_width, const int weights_height,
     const float * weights_mask, 
     const float * grad_output, const int grad_output_width, const int grad_output_height,
     const float * grad_mask, 
-    const int use_softmax,
     float ** d_ret, float ** e_ret){
   //Calculate weight_rand_mask - b
   float * diff3_diff = (float *) malloc(sizeof(float) * input_width * weights_height);
@@ -920,6 +961,10 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         assert(deriv_batchsize == num_images_this_batch);
 
         //TODO verify with Frievalds' algorithm
+        //Need to verify 2 multiplications
+
+
+
 
         float * e_weights;
         float * d_derivative;
