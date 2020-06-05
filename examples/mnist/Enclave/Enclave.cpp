@@ -885,7 +885,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
 
       //Assign next iteration's input to be the unmasked GPU result
-      free(input_data);
       if(layer_idx != num_layers-1){
         if(input_data != NULL){
           free(input_data);
