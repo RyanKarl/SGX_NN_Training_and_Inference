@@ -31,7 +31,7 @@ using std::string;
 #else
 # include <stdlib.h> //Need this for rand
 # include <assert.h>
-inline void rand_bytes(unsigned char * r, size_t n_bytes){
+inline void rand_bytes(unsigned char * r, const size_t n_bytes){
   assert(r);
   for(size_t i = 0; i < n_bytes; i++){
     r[i] = (unsigned char) rand();
@@ -41,7 +41,7 @@ inline void rand_bytes(unsigned char * r, size_t n_bytes){
 #endif
 
 #ifdef NENCLAVE
-void print_floatarr(float * data, int size){
+void print_floatarr(const float * data, int size){
   for(int i = 0; i < size; i++){
     cout << data[i] << ' ';
   }
@@ -51,8 +51,10 @@ void print_floatarr(float * data, int size){
 
 //TODO change index macro to take width
 //0 is height, 1 is width
-int frievald(float * a, float * b, float * c, 
-  int a_height, int a_width, int b_height, int b_width, int c_height, int c_width)
+int frievald(const float * a, const float * b, const float * c, 
+  const int a_height, const int a_width,
+  const int b_height, const int b_width, 
+  const int c_height, const int c_width)
 {
   //Mult. is defined
   assert(a_width == b_height);
@@ -117,54 +119,16 @@ int frievald(float * a, float * b, float * c,
   return 0;
 }
 
-int verify_frievald(float * data, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width){
-  float * matrix_offsets[NUM_MATRICES];
-  matrix_offsets[0] = data;
-  matrix_offsets[1] = matrix_offsets[0] + (a_height*a_width);
-  matrix_offsets[2] = matrix_offsets[1] + (b_height*b_width);
+int verify_frievald(const float * a, const float * b, const float * c,
+    const int a_height, const int a_width, 
+    const int b_height, const int b_width,
+    const int c_height, const int c_width){
   for(unsigned int j = 0; j < K_PROBABILITY; j++){
-  	if(frievald(matrix_offsets[0], matrix_offsets[1], matrix_offsets[2], a_height, a_width, b_height, b_width, c_height, c_width)){
+  	if(frievald(a, b, c, a_height, a_width, b_height, b_width, c_height, c_width)){
   		return 1;
   	}
   }
   return 0;
-}
-
-
-int verify_and_activate(float * data_in, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width,
- float * data_out, int out_height, int out_width){
-  //Copy data to enclave space
-  //Validate data here
-  if(a_height < 0 || a_width < 0 ||
-     b_height < 0 || b_width < 0 ||
-     c_height < 0 || c_width < 0 ||
-     out_height < 0 || out_width < 0){
-    return 1;
-  }
-  int mult_ptr_offset = (a_height*a_width) + (b_height*b_width);
-  int total_input_elts = mult_ptr_offset + (c_height*c_width);
-  float * enclave_data = (float *) malloc(total_input_elts*sizeof(float));
-  for(int i = 0; i < total_input_elts; i++){
-    enclave_data[i] = data_in[i];
-  }
-  
-  if(verify_frievald(enclave_data, a_height, a_width, b_height, b_width, c_height, c_width)){
-    free(enclave_data);
-    enclave_data = NULL;
-    return 1;
-  }
-  
-  float * activation_buffer_enclave = enclave_data + mult_ptr_offset;
-  if(activate(activation_buffer_enclave, c_height, c_width)){
-    free(enclave_data);
-    enclave_data = NULL;
-    return 1;
-  }
-  
-  free(enclave_data);
-  enclave_data = NULL;
-  return 0;
-
 }
 
 
@@ -832,9 +796,10 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
       //Validate result with Frievalds' algorithm
       //If it fails, send {-1, -1} back to the GPU and exit
-      if(frievald(input_data, layer_data[layer_idx], gpu_result, 
+      if(verify_frievald(input_data, layer_data[layer_idx], gpu_result, 
   num_images_this_batch, num_neurons, num_neurons, 1, num_result_neurons, result_batchsize)){
         //Verification failed!
+/*
         int failed_resp[2] = {-1, -1};
 #ifdef NENCLAVE      
         if(write_stream((void *) failed_resp, sizeof(failed_resp))){
@@ -849,12 +814,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           return 1;
         }
 #endif        
+*/
         print_out((char *) &("Frievalds' algorithm failed!"[0]), true);
-        return 1;
+        //return 1;
       }
       else{
 
-        if(verbose >= 1){
+        if(verbose >= 2){
 #ifdef NENCLAVE          
           cout << "Frievalds' algorithm succeeded!" << endl;
 #else
@@ -1011,15 +977,15 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
         //Verify with Frievalds' algorithm
         //Need to verify 2 multiplications
-        if(frievald(final_data, layer_data[rev_layer_idx], gpu_derivative, 
+        if(verify_frievald(final_data, layer_data[rev_layer_idx], gpu_derivative, 
           num_images_this_batch, layer_files[rev_layer_idx].neurons, layer_files[rev_layer_idx].neurons, 1, num_images_this_batch, 1)){
           print_out((char *) &("Frievalds' algorithm failed on prod. of final_data and layer_data"), true);
-          return 1;
+          //return 1;
         }
-        if(frievald(final_data, derivative, gpu_weights_update, 
+        if(verify_frievald(final_data, derivative, gpu_weights_update, 
           num_images_this_batch, layer_files[rev_layer_idx].neurons, layer_files[rev_layer_idx].neurons, 1, num_images_this_batch, num_images_this_batch)){
           print_out((char *) &("Frievalds' algorithm failed on prod. of final_data and derivative"), true);
-          return 1;
+          //return 1;
         }
 
         float * e_weights;

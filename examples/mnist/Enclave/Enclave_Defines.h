@@ -8,9 +8,9 @@
 
 # define NUM_MATRICES 3
 # define MAT_DIM 2
-# define K_PROBABILITY 2
+# define K_PROBABILITY 4
 
-# define FLOAT_TOLERANCE 1e-2
+# define FLOAT_TOLERANCE 1e-3
 
 //Index in row-major order
 //i indexes width, j indexes height
