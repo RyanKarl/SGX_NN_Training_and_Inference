@@ -532,7 +532,7 @@ float * crossentropy_derivative(const unsigned int * actual, const float * predi
 
 
 
-void update_weights(float * weights, const float * weights_gradient, int total_elts, float learning_rate){
+void update_weights(float * weights, const float * weights_gradient, const int total_elts, const float learning_rate){
   for(int i = 0; i < total_elts; i++){
     weights[i] -= learning_rate*weights_gradient[i];
   }
@@ -1001,7 +1001,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           grad_mask, 
           &d_derivative, &e_weights);
 
-        //TODO update this layer's weights
+        //TODO update this layer's weights TODO check with Mark we did this right
+        update_weights(layer_data[rev_layer_idx], d_derivative, 
+          layer_files[rev_layer_idx+1].neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
 
         //TODO set up things for next loop
 
@@ -1070,3 +1072,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   return 0;
 
 }
+
+//TODO consistent verbosity levels
+//0 no output
+//1 timing data
+//2 logging
+//3 data
