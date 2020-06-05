@@ -301,13 +301,13 @@ int main(int argc, char ** argv){
 #endif  
 
 #ifdef NENCLAVE
-  int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, weights_outfile, verbose);
+  int enclave_result = enclave_main(network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, weights_outfile, backprop, verbose);
   
 #else
   int enclave_result;
   sgx_enclave_id_t eid = global_eid;
   sgx_status_t sgx_enclave_stat = enclave_main(eid, &enclave_result,
-    network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, weights_outfile, verbose); 
+    network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, weights_outfile, backprop, verbose); 
 #endif  
 
   if(verbose){
