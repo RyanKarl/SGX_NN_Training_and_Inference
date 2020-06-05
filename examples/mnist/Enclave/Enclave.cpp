@@ -290,22 +290,30 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
     const float * final_data, const int final_data_width, const int final_data_height,
     const float * weights, const int weights_width, const int weights_height,
     //const float * weights_masks,
-    const float * grad_output, const int grad_output_width, const int grad_output_height
+    const float * grad_output, const int grad_output_width, const int grad_output_height,
     float ** d_ret
     //int * re_w, int * ret_w
     ){
   //final_data is softmax(a*b.t)
   //take the derivative of that term
-  float * grad_output_transposed = transpose(grad_output, grad_output_width, grad_output_height)
+  //TODO only need one small buffer for soft_der at a time
+  float * grad_output_transposed = transpose(grad_output, grad_output_width, grad_output_height);
   float * soft_der = (float *) malloc(sizeof(float) * input_height * input_width * input_width);
   float * c_prod = (float *) malloc(sizeof(float) * input_width * input_height);
+  float * c_prod_ptr = c_prod;
+  int prod_w, prod_h;
   for(int i = 0; i < input_height; i++){
+    //TODO softmax_derivative allocates memory
     softmax_derivative(input + (i*input_width), input_width,
-     doft_der + (i*input_width*input_width)); 
+     soft_der + (i*input_width*input_width)); 
+    //Get the right part of the buffer to write to
+    c_prod_ptr = c_prod + (i*input_width);
     //Now multiply
     matrix_multiply(grad_output_transposed + (i*grad_output_width), 1, grad_output_height,
     soft_der, input_width, input_width, //Same args for w and h intentional
-    &(c_prod + (i*input_width)), input_width, input_height, 0, 0);
+    (float **) &c_prod_ptr, &prod_w, &prod_h, 0, 0);
+    assert(prod_w == input_width);
+    assert(prod_h == input_height);
   }
 
   free(grad_output_transposed);
@@ -316,12 +324,13 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
   //*d_ret = (float *) malloc(sizeof(float *) * input_height * weights_height);
   
   //Transpose b
-  float * b_transpose = tranpose(weights, weights_width, weights_height);
+  float * b_transpose = transpose(weights, weights_width, weights_height);
 
   int d_w, d_h;
+  //Allocates new memory pointed to by *d_ret
   matrix_multiply(c_prod, input_width, input_height,
-    b_transpose, weight_height, weights_width,
-    *d_ret, d_w, d_h, 0);
+    b_transpose, weights_height, weights_width,
+    d_ret, &d_w, &d_h, 0);
 
   free(b_transpose);
   b_transpose = NULL;
@@ -346,7 +355,7 @@ void backwards_demask_ordinary(const float * input, const int input_width, const
   int diff_w, diff_h;
   float * diff_tmp;
   matrix_multiply(input_mask, weights_width, weights_height,
-   diff3_diff, input_mask_height, weights_width, //Swap width and height
+   diff3_diff, input_height, weights_width, //Swap width and height
    &diff_tmp, &diff_w, &diff_h, 0);
 
   float * diff2;
@@ -365,7 +374,7 @@ void backwards_demask_ordinary(const float * input, const int input_width, const
   diff3_diff = NULL;
 
   //diff_tmp now holds diff3-diff-diff2
-  float * grad_rand_mask_transformed = transform(grad_mask, diff_tmp, diff_w, diff_h, use_softmax);
+  float * grad_rand_mask_transformed = transform(grad_mask, diff_tmp, diff_w, diff_h, 0); //Not the last layer, so don't use softmax
   float * weight_mask_weights = (float *) malloc(sizeof(float) * grad_output_width * weights_height);
   matrix_sub(weights, weights_mask, grad_output_width * weights_height, weight_mask_weights);
   int d_diffb_w, d_diffb_h;
@@ -519,6 +528,7 @@ float * gather_1d(const float * data, const int data_elts,
 
 //Return one-hot encoding - allocates memory
 //Ordered by label, then by dimension
+/*
 float * one_hot_encoding_mean(const unsigned int * labels, 
   const unsigned int * possible_labels, const int batchsize, const int num_possible_labels){
   //float ret = 0.0f;
@@ -528,23 +538,16 @@ float * one_hot_encoding_mean(const unsigned int * labels,
       result[i+(j*num_possible_labels)] = (labels[j] == possible_labels[i])? (1.0f/batchsize) : 0.0f;
     }
   }
-  //One or the other of these constructs
-  /*
-  for(int i = 0; i < num_possible_labels; i++){
-    for(int j = 0; j < batchsize; j++){
-      result[j+(i*batchsize)] = (labels[j] == possible_labels[i])? (1.0f/batchsize) : 0.0f;
-    }
-  }
-  */
   return result_tmp;
 }
+*/
 
 //Actual is ground truth - 0 or 1 for each label
 float crossentropy_loss(const unsigned int * actual, const float * predicted,
  const int num_possible_labels, const int batchsize){
   float sum = 0.0f;
   for(int i = 0; i < batchsize; i++){
-    assert(actual[i] < num_possible_labels);
+    assert((int)actual[i] < num_possible_labels);
     sum -= log(predicted[(i*num_possible_labels)+actual[i]]);
   }
   return sum/batchsize;
@@ -917,13 +920,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Print output
       if(verbose >= 1){
         std::string loss_str = "Loss this batch: " + std::to_string(batch_loss);
-        print_out((char *) loss_str.c_str()[0], false);
+        print_out((char *) &(loss_str.c_str()[0]), false);
       }
 
       //TODO Traverse layers backwards and do backprop
       for(int rev_layer_idx = num_layers-1; rev_layer_idx >= 0; rev_layer_idx--){
 
-        if(rev_layer_idx == num_layers-1){
+        if(rev_layer_idx == (int)num_layers-1){
           //TODO Call backwards demasking for softmax
 
           continue;
@@ -933,12 +936,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         float * rev_mask_input = (float *) malloc(sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
         float * rev_mask_weights = (float *) malloc(sizeof(float)*layer_files[rev_layer_idx].neurons);
         float * deriv_mask = (float *) malloc(sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
-        rand_bytes(rev_mask_input, sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
-        rand_bytes(rev_mask_weights, sizeof(float)*layer_files[rev_layer_idx].neurons);
-        rand_bytes(deriv_mask, sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
+        rand_bytes((unsigned char *) rev_mask_input, sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
+        rand_bytes((unsigned char *) rev_mask_weights, sizeof(float)*layer_files[rev_layer_idx].neurons);
+        rand_bytes((unsigned char *) deriv_mask, sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
         //final_data now used for the next level
         mask(final_data, rev_mask_input, num_images_this_batch*layer_files[rev_layer_idx].neurons, 0);
-        mask(layer_data[layer_idx], rev_mask_weights, layer_files[rev_layer_idx].neurons, 0);
+        mask(layer_data[rev_layer_idx], rev_mask_weights, layer_files[rev_layer_idx].neurons, 0);
         mask(derivative, deriv_mask, num_images_this_batch*layer_files[rev_layer_idx].neurons, 0);
         //Send out to GPU
         if(send_to_gpu(final_data, num_images_this_batch, layer_files[rev_layer_idx].neurons, verbose)){
@@ -968,12 +971,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           print_out((char *) &("Failed to receive weights update from GPU"[0]), true);
           return 1;
         }
-        assert(update_neurons == layer_files[rev_layer_idx].neurons);
+        assert(update_neurons == (int) layer_files[rev_layer_idx].neurons);
         assert(update_batchsize == 1);
-        assert(deriv_neurons == layer_files[rev_layer_idx].neurons);
-        assert(deriv_batchsize == num_images_this_batch);
+        assert(deriv_neurons == (int) layer_files[rev_layer_idx].neurons);
+        assert(deriv_batchsize == (int) num_images_this_batch);
 
         //Also read back this layer's feed-forward output from the GPU for convenience
+        //TODO free these when done
         float * layer_forward_data;
         int fwd_w, fwd_h;
         if(receive_from_gpu(&layer_forward_data, &fwd_w, &fwd_h, verbose)){
@@ -987,8 +991,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           return 1;
         }
         float * weights_mask;
-        int weigths_mask_w, weights_mask_h;
-        if(receive_from_gpu(&weights_mask, &weigths_mask_w, &weights_mask_h, verbose)){
+        int weights_mask_w, weights_mask_h;
+        if(receive_from_gpu(&weights_mask, &weights_mask_w, &weights_mask_h, verbose)){
           print_out((char *) &("Failed to receive weights mask data from GPU"[0]), true);
           return 1;
         }        
@@ -999,7 +1003,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           return 1;
         }
         assert(weights_mask_w == 1);
-        assert(weights_mask_h == layer_files[rev_layer_idx].neurons);
+        assert(weights_mask_h == (int) layer_files[rev_layer_idx].neurons);
 
 
         //Verify with Frievalds' algorithm
@@ -1046,8 +1050,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         rev_mask_weights = NULL;
         free(deriv_mask);
         deriv_mask = NULL;
-        free(gpu_backprop_result);
-        gpu_backprop_result = NULL;
+        free(gpu_derivative);
+        gpu_derivative = NULL;
         free(gpu_weights_update);
         gpu_weights_update = NULL;
       }

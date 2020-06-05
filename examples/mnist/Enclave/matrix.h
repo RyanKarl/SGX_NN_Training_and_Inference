@@ -83,23 +83,7 @@ int activate_derivative(float * data, int total_elts){
   return 0;
 }
 
-float * transform(const float * x, const float * term, const int width, const int height, const int use_softmax){
-  float * difference = (float *) malloc(sizeof(float) * width * height);
-  matrix_sub(x, term, width*height, difference);
-  if(!use_softmax){
-    activate(difference, width, height);
-  }
-  else{
-    softmax(difference, width*height);
-  }
-  float * squared;
-  int p_w, p_h;
-  matrix_multiply(difference, width, height, difference, width, height, &squared, &p_w, &p_h, 0);
-  free(difference);
-  difference = NULL;
-  sub_from_ones(squared, width*height);
-  return squared;
-}
+
 
 float * transpose(const float * x, const int width, const int height){
   float * ret = (float *) malloc(sizeof(float) * width * height);
@@ -149,13 +133,11 @@ void softmax(float * x, const int total_elts){
 
 //https://stats.stackexchange.com/questions/215521/how-to-find-derivative-of-softmax-function-for-the-purpose-of-gradient-descent/328095
 //Returns a pointer to dynamically freed memory
-void softmax_derivative(float * y, const int n, float * y_squared){
+void softmax_derivative(const float * y, const int n, float * y_squared){
   //First, create the identity matrix
   //float * y_squared;
   int y_sq_h, y_sq_w;
-  matrix_multiply(y, 1, n,
-    y, n, 1, 
-    y_squared, &y_sq_w, &y_sq_h, 0, 0);
+  matrix_multiply(y, 1, n, y, n, 1, (float **) &y_squared, &y_sq_w, &y_sq_h, 0, 0);
 #ifdef DEBUG  
   assert(y_sq_w == n);
   assert(y_sq_h == n);
@@ -184,6 +166,24 @@ float * softmax_derivative(float * s,
 
 }
 */
+
+float * transform(const float * x, const float * term, const int width, const int height, const int use_softmax){
+  float * difference = (float *) malloc(sizeof(float) * width * height);
+  matrix_sub(x, term, width*height, difference);
+  if(!use_softmax){
+    activate(difference, width, height);
+  }
+  else{
+    softmax(difference, width*height);
+  }
+  float * squared;
+  int p_w, p_h;
+  matrix_multiply(difference, width, height, difference, width, height, &squared, &p_w, &p_h, 0);
+  free(difference);
+  difference = NULL;
+  sub_from_ones(squared, width*height);
+  return squared;
+}
 
 int argmax(float * data, int total_elts){
   int idx = 0;
