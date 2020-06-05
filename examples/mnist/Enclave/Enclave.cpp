@@ -853,11 +853,15 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         return 1;
       }
       else{
-#ifdef NENCLAVE
+
         if(verbose >= 1){
+#ifdef NENCLAVE          
           cout << "Frievalds' algorithm succeeded!" << endl;
+#else
+          print_out("Frievalds' algorithm succeeded!", false);          
+#endif              
         }
-#endif        
+    
       }
 
       //Result has been verified
