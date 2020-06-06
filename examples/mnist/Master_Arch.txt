@@ -1,3 +1,6 @@
-1 1 16 2 10
-16 weights16.txt 0
-1 weights16.txt 0
+1 1 784 5 10
+500 fc1.csv 0
+500 fc2.csv 0
+500 fc3.csv 0
+500 fc4.csv 0
+10 fc5.csv 0
