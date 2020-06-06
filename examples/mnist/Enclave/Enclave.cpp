@@ -787,6 +787,31 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
 #endif      
 
+      //DEBUG FRIEVALD
+#ifdef NENCLAVE
+      //Test multiplication
+      float * enc_mul_test = NULL;
+      int test_w, test_h;
+      matrix_multiply(input_data, num_neurons, num_images_this_batch,
+        layer_data[layer_idx], layer_files[layer_idx].neurons, num_neurons,
+        &enc_mul_test, &test_w, &test_h, 0, 1);
+      assert(test_w == num_result_neurons);
+      assert(test_h == result_batchsize);
+      for(int i = 0; i < test_w * test_h; i++){
+        assert(!FLOAT_CMP(enc_mul_test[i], gpu_result[i]));
+      }
+
+      //Now test Frievalds'
+      if(verify_frievald(input_data, layer_data[layer_idx], enc_mul_test, 
+          num_neurons, num_images_this_batch,
+          layer_files[layer_idx].neurons, num_neurons,
+          num_result_neurons, result_batchsize)){
+        assert("Frievalds' algorithm failed on internally-calculated product" && 0);
+      }  
+      free(enc_mul_test);
+      enc_mul_test = NULL;
+#endif      
+
       //Validate result with Frievalds' algorithm
       //If it fails, send {-1, -1} back to the GPU and exit
       if(verify_frievald(input_data, layer_data[layer_idx], gpu_result, 
