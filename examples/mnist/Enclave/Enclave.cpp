@@ -622,7 +622,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int batchsize = 0; 
   unsigned int num_pixels = 0;
   unsigned int num_possible_labels = 0;
-  bool skip_masking = true;
+  bool skip_masking = false;
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -749,13 +749,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
 
       //Mask weights
-      float * mask_weights = (float *) malloc(sizeof(float) * num_neurons);
+      int num_weights = num_neurons * layer_files[layer_idx].neurons;
+      float * mask_weights = (float *) malloc(sizeof(float) * num_weights);
       //Cast should be explicit, for the non-SGX version
-      rand_bytes((unsigned char *) mask_weights, sizeof(float) * num_neurons);
-      rand_buf_to_floats(mask_weights, num_neurons);
+      rand_bytes((unsigned char *) mask_weights, sizeof(float) * num_weights);
+      rand_buf_to_floats(mask_weights, num_weights);
       //normalize(mask_weights, num_neurons);
       if(!skip_masking){
-        mask(layer_data[layer_idx], mask_weights, num_neurons, false);
+        mask(layer_data[layer_idx], mask_weights, num_weights, false);
         
       }
       if(verbose){
@@ -841,8 +842,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
       else{
         gpu_unmasked_result = gpu_result;
-        gpu_unmasked_w = result_batchsize;
-        gpu_unmasked_h = layer_files[layer_idx].neurons;
+         gpu_unmasked_h = result_batchsize;
+         gpu_unmasked_w = layer_files[layer_idx].neurons;
       }
       
 
@@ -868,8 +869,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       else{
         final_data = gpu_unmasked_result;
         //Check sizes
-        assert(gpu_unmasked_w == (int) num_images_this_batch);
-        assert(gpu_unmasked_h == (int) num_possible_labels);
+        assert(gpu_unmasked_h == (int) num_images_this_batch);
+        assert(gpu_unmasked_w == (int) num_possible_labels);
         if(input_data != NULL){
           free(input_data);
           input_data = NULL;
