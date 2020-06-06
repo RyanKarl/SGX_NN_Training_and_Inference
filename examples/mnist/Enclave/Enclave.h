@@ -50,6 +50,7 @@ void print_out(char * msg, int error);
 int file_to_string(char * fname, char * out, size_t str_buf_len);
 int read_weight_file(char * filename, size_t num_elements, float * buf);
 int floats_to_csv(char * fname, size_t num_elts, float * data);
+size_t file_size(char * fname);
 
 #if defined(__cplusplus)
 }

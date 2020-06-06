@@ -129,6 +129,17 @@ int floats_to_csv(char * fname, size_t num_elts, float * data){
   return ofs.good() ? 0 : 1;
 }
 
+//Does not count null terminator 
+size_t file_size(char * fname){
+  ifstream network_ifs(fname);
+  std::ostringstream oss;
+  assert(network_ifs.good());
+  
+  oss << network_ifs.rdbuf();
+  network_ifs.close();
+  return oss.str().size();
+}
+
 
 int file_to_string(char * fname, char * out, size_t str_buf_len){
   ifstream network_ifs(fname);

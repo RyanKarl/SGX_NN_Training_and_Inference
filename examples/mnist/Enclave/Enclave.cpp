@@ -134,17 +134,29 @@ int verify_frievald(const float * a, const float * b, const float * c,
 int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, 
   unsigned int & num_pixels, unsigned int & batchsize, unsigned int & num_labels){
   
-  char str_in[STRUCTURE_BUFLEN] = {'\0'};
+  size_t file_len;
 
 
 #ifdef NENCLAVE
-  if(file_to_string(network_structure_fname, str_in, STRUCTURE_BUFLEN+1)){
+  file_len = file_size(network_structure_fname);
+#else
+  sgx_status_t ocall_status;
+  ocall_status = file_size(&file_len, network_structure_fname);
+  if(ocall_status){
+    return 1;
+  }
+#endif  
+
+  char * str_in = (char *) calloc(file_len+1, sizeof(char));
+
+
+#ifdef NENCLAVE
+  if(file_to_string(network_structure_fname, str_in, file_len)){
     return 1;
   }
 #else
-  sgx_status_t ocall_status;
   int ocall_ret;
-  ocall_status = file_to_string(&ocall_ret, network_structure_fname, str_in, STRUCTURE_BUFLEN+1);
+  ocall_status = file_to_string(&ocall_ret, network_structure_fname, str_in, file_len);
   if(ocall_ret){
     return 1;
   }
