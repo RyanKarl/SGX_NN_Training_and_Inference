@@ -206,5 +206,14 @@ int nan_idx(const float * data, const int num_elts){
   return -1;
 }
 
+int bounds_check(const float * data, const int num_elts, const float min, const float max){
+  for(int i = 0; i < num_elts; i++){
+    if(data[i] < min || data[i] >= max){
+      return 1;
+    }
+  }
+  return 0;
+}
+
 
 #endif

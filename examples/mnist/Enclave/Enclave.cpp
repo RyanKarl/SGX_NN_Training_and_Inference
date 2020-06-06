@@ -418,11 +418,11 @@ void backwards_demask_ordinary(const float * input, const int input_width, const
 
 }
 
-void forward_demask(const float * input, const int input_height, const int input_width,
+void forward_demask(const float * input, const int input_width, const int input_height,
   const float * input_masks, 
-  const float * weights, const int weights_height, const int weights_width,
+  const float * weights, const int weights_width, const int weights_height,
   const float * weights_masks,
-  float ** result, int * result_height, int * result_width){
+  float ** result, int * result_width, int * result_height){
 
   assert(input_width == weights_height);
 
@@ -622,7 +622,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int batchsize = 0; 
   unsigned int num_pixels = 0;
   unsigned int num_possible_labels = 0;
-  bool skip_masking = false;
+  bool skip_masking = true;
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -717,7 +717,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     //Now we have the whole batch in a single array
     for(unsigned int layer_idx = 0; layer_idx < num_layers; layer_idx++){
       int num_neurons;
-      num_neurons = layer_idx ? layer_files[layer_idx].neurons : num_pixels;
+      num_neurons = layer_idx ? layer_files[layer_idx-1].neurons : num_pixels;
 
       //Mask the current input
       //First, get the random mask
@@ -743,7 +743,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
 #endif      
       //Send masked input to the GPU
-      if(send_to_gpu(input_data, num_images_this_batch, num_pixels, verbose)){
+      if(send_to_gpu(input_data, num_images_this_batch, num_neurons, verbose)){
         print_out((char *) &("Failed to send input data"[0]), true);
         return 1;
       }
@@ -763,7 +763,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
 
       //Send weights to GPU
-      if(send_to_gpu(layer_data[layer_idx], layer_idx ? layer_files[layer_idx-1].neurons : num_pixels, layer_files[layer_idx].neurons, verbose)){
+      if(send_to_gpu(layer_data[layer_idx], num_neurons, layer_files[layer_idx].neurons, verbose)){
         print_out((char *) &("Failed to send weights data"[0]), true);
         return 1;
       }
@@ -781,7 +781,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 #ifdef NENCLAVE
       if(verbose >= 2){
         cout << "Input: " << num_neurons << ' ' << num_images_this_batch << endl;
-        cout << "Weights: " << ' ' << layer_files[layer_idx].neurons << ' ' << (layer_idx ? layer_files[layer_idx-1].neurons : num_pixels) << endl;
+        cout << "Weights: " << ' ' << layer_files[layer_idx].neurons << ' ' << num_neurons << endl;
         cout << "GPU result: " << num_result_neurons << ' ' << result_batchsize << endl;
       }
 #endif      
@@ -790,7 +790,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //If it fails, send {-1, -1} back to the GPU and exit
       if(verify_frievald(input_data, layer_data[layer_idx], gpu_result, 
           num_neurons, num_images_this_batch,
-          layer_files[layer_idx].neurons, (layer_idx ? layer_files[layer_idx-1].neurons : num_pixels),
+          layer_files[layer_idx].neurons, num_neurons,
           num_result_neurons, result_batchsize)){
         //Verification failed!
 /*
@@ -829,15 +829,24 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Recall that input and weights are currently masked
       float * gpu_unmasked_result = NULL;
       int gpu_unmasked_w, gpu_unmasked_h;
-      forward_demask(input_data, num_images_this_batch, num_neurons,
+      if(!skip_masking){
+        forward_demask(input_data, num_neurons, num_images_this_batch,
         mask_data, 
-        layer_data[layer_idx], num_neurons, 1,
+        layer_data[layer_idx], layer_files[layer_idx].neurons, num_neurons,
         mask_weights, 
-        &gpu_unmasked_result, &gpu_unmasked_h, &gpu_unmasked_w);
+        &gpu_unmasked_result, &gpu_unmasked_w, &gpu_unmasked_h);
+        //Undo masking
+        //May later just have a seperate buffer for masked weights
+        mask(layer_data[layer_idx], mask_weights, num_neurons, true);
+      }
+      else{
+        gpu_unmasked_result = gpu_result;
+        gpu_unmasked_w = result_batchsize;
+        gpu_unmasked_h = layer_files[layer_idx].neurons;
+      }
+      
 
-      //Undo masking
-      //May later just have a seperate buffer for masked weights
-      mask(layer_data[layer_idx], mask_weights, num_neurons, true);
+
 
       //Activate unmasked result
       if(layer_idx != num_layers-1){
@@ -858,7 +867,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
       else{
         final_data = gpu_unmasked_result;
-        input_data = NULL;
+        //Check sizes
+        assert(gpu_unmasked_w == (int) num_images_this_batch);
+        assert(gpu_unmasked_h == (int) num_possible_labels);
+        if(input_data != NULL){
+          free(input_data);
+          input_data = NULL;
+        }
       }
       free(mask_data);
       mask_data = NULL;
