@@ -729,7 +729,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out((char *) &("Finished masking weights"[0]), false);
       }
       //Send weights to GPU
-      if(send_to_gpu(layer_data[layer_idx], 1, num_neurons, verbose)){
+      if(send_to_gpu(layer_data[layer_idx], layer_idx ? layer_files[layer_idx-1].neurons : num_pixels, num_neurons, verbose)){
         print_out((char *) &("Failed to send input data"[0]), true);
         return 1;
       }
