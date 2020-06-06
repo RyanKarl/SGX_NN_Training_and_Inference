@@ -40,6 +40,17 @@ inline void rand_bytes(unsigned char * r, const size_t n_bytes){
 }
 #endif
 
+void rand_buf_to_floats(float * buf, size_t num_floats){
+  for(size_t i = 0; i < num_floats; i++){
+    unsigned char * char_addr = (unsigned char *) &buf[i];
+    buf[i] = ((float) (*char_addr) / (1 << CHAR_BIT));
+    assert(!isnan(buf[i]));
+    assert(buf[i] >= 0.0f);
+    assert(buf[i] < 1.0f);
+    //assert(!isnan(((float) (*char_addr) /(sizeof(unsigned char)*CHAR_BIT))));
+  }
+}
+
 #ifdef NENCLAVE
 void print_floatarr(const float * data, int size){
   for(int i = 0; i < size; i++){
@@ -83,9 +94,9 @@ int frievald(const float * a, const float * b, const float * c,
   assert(br_w == 1);
 
   matrix_multiply(c, c_width, c_height,
-    r, 1, b_width,
+    r, 1, c_width,
     &cr, &cr_w, &cr_h, 0);
-  assert(cr_h == b_width);
+  assert(cr_h == c_height);
   assert(cr_w == 1);
 
   free(r);
@@ -119,9 +130,9 @@ int frievald(const float * a, const float * b, const float * c,
 }
 
 int verify_frievald(const float * a, const float * b, const float * c,
-    const int a_height, const int a_width, 
-    const int b_height, const int b_width,
-    const int c_height, const int c_width){
+    const int a_width, const int a_height, 
+    const int b_width, const int b_height,
+    const int c_width, const int c_height){
   for(unsigned int j = 0; j < K_PROBABILITY; j++){
   	if(frievald(a, b, c, a_height, a_width, b_height, b_width, c_height, c_width)){
   		return 1;
@@ -185,12 +196,16 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
 int mask(float * input, const float * masks, int input_size, bool negate){
   if(negate){
     for(int i = 0; i < input_size; i++){
+      assert(!isnan(input[i]));
+      assert(!isnan(masks[i]));
       input[i] -= masks[i];
     }
 
   }
   else{
     for(int i = 0; i < input_size; i++){
+      assert(!isnan(input[i]));
+      assert(!isnan(masks[i]));
       input[i] += masks[i];
     }
   }
@@ -198,21 +213,23 @@ int mask(float * input, const float * masks, int input_size, bool negate){
 }
 
 //Assumes a buffer is allocated
-int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
+int read_all_weights(const vector<layer_file_t> & layers, float ** bufs, unsigned int num_pixels){
   for(size_t i = 0; i < layers.size(); i++){
-    bufs[i] = (float *) malloc(layers[i].neurons * sizeof(float));
+    int num_floats = layers[i].neurons * (i? layers[i-1].neurons : num_pixels);
+
+    bufs[i] = (float *) malloc(num_floats * sizeof(float));
     //Should check return val
     size_t len = layers[i].filename.size();
     char * fname_buf = (char *) calloc(len+1, sizeof(char));
     strncat(fname_buf, layers[i].filename.c_str(), len);
 #ifdef NENCLAVE
-    if(read_weight_file_plain(fname_buf, layers[i].neurons * sizeof(float), bufs[i])){
+    if(read_weight_file_plain(fname_buf, num_floats * sizeof(float), bufs[i])){
       return 1;
     }
 #else
     int ocall_ret;
     sgx_status_t ocall_status;
-    ocall_status = read_weight_file_plain(&ocall_ret, fname_buf, layers[i].neurons * sizeof(float), bufs[i]);
+    ocall_status = read_weight_file_plain(&ocall_ret, fname_buf, num_floats * sizeof(float), bufs[i]);
     if(ocall_status || ocall_ret){
       return 1;
     }
@@ -513,7 +530,7 @@ int send_to_gpu(const float * data, const int batchsize, const int num_neurons, 
 #ifdef NENCLAVE
   int written = write_stream((void *) out_dims, sizeof(out_dims));
   if(written){
-    print_out((char *) &("Failed writing input dimensions"[0]), true);
+    print_out((char *) &("Failed writing matrix dimensions"[0]), true);
     cout << written << " bytes sent" << endl;        
     return 1;
   }
@@ -523,23 +540,23 @@ int send_to_gpu(const float * data, const int batchsize, const int num_neurons, 
 
   ocall_status = write_stream(&ocall_ret, (void *) out_dims, sizeof(out_dims));
   if(ocall_ret){
-    print_out((char *) &("Failed writing input dimensions"[0]), true);
+    print_out((char *) &("Failed writing matrix dimensions"[0]), true);
     return 1;
   }
 #endif      
   if(verbose){
-    print_out((char *) &("Sent input dimensions"[0]), false);   
+    print_out((char *) &("Sent matrix dimensions"[0]), false);   
   }    
  
 #ifdef NENCLAVE  
   if(write_stream((void *) data, sizeof(float)*batchsize*num_neurons)){
-    print_out((char *) &("Failed writing input"[0]), true);
+    print_out((char *) &("Failed writing matrix"[0]), true);
     return 1;
   }
 #else
   ocall_status = write_stream(&ocall_ret, (void *) data, sizeof(float)*batchsize*num_neurons);
   if(ocall_ret){
-    print_out((char *) &("Failed writing input"[0]), true);
+    print_out((char *) &("Failed writing matrix"[0]), true);
     return 1;
   }
 #endif
@@ -605,6 +622,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int batchsize = 0; 
   unsigned int num_pixels = 0;
   unsigned int num_possible_labels = 0;
+  bool skip_masking = false;
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -652,7 +670,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   float ** layer_data;
   layer_data = (float **) malloc(sizeof(float *) * num_layers);
   //Read in all layer data
-  if(read_all_weights(layer_files, layer_data)){
+  if(read_all_weights(layer_files, layer_data, num_pixels)){
     print_out((char *) &("Failed to read weights"[0]), true);
     return 1;
   }
@@ -707,14 +725,25 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Cast should be explicit, for the non-SGX version
       rand_bytes((unsigned char *) mask_data, sizeof(float)*num_neurons*num_images_this_batch);
       //Normalize mask
-      normalize(mask_data, num_neurons*num_images_this_batch);
+      //normalize(mask_data, num_neurons*num_images_this_batch);
+      rand_buf_to_floats(mask_data, num_neurons*num_images_this_batch);
       //Next, mask the data
-      mask(input_data, mask_data, num_neurons*num_images_this_batch, false);
+      if(!skip_masking){
+        mask(input_data, mask_data, num_neurons*num_images_this_batch, false);
+      }
       if(verbose){
         print_out((char *) &("Finished masking input"[0]), false);
+      }    
+#ifdef NENCLAVE
+      if(verbose >= 2){
+        int n_idx = nan_idx(input_data, num_images_this_batch*num_pixels);
+        if(n_idx != -1){
+          cout << "NaN found at " << n_idx << " of input_data, value is " << input_data[n_idx] << endl;
+        }
       }
+#endif      
       //Send masked input to the GPU
-      if(send_to_gpu(input_data, num_images_this_batch, num_neurons, verbose)){
+      if(send_to_gpu(input_data, num_images_this_batch, num_pixels, verbose)){
         print_out((char *) &("Failed to send input data"[0]), true);
         return 1;
       }
@@ -723,14 +752,19 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       float * mask_weights = (float *) malloc(sizeof(float) * num_neurons);
       //Cast should be explicit, for the non-SGX version
       rand_bytes((unsigned char *) mask_weights, sizeof(float) * num_neurons);
-      normalize(mask_weights, num_neurons);
-      mask(layer_data[layer_idx], mask_weights, num_neurons, false);
+      rand_buf_to_floats(mask_weights, num_neurons);
+      //normalize(mask_weights, num_neurons);
+      if(!skip_masking){
+        mask(layer_data[layer_idx], mask_weights, num_neurons, false);
+        
+      }
       if(verbose){
         print_out((char *) &("Finished masking weights"[0]), false);
       }
+
       //Send weights to GPU
       if(send_to_gpu(layer_data[layer_idx], layer_idx ? layer_files[layer_idx-1].neurons : num_pixels, layer_files[layer_idx].neurons, verbose)){
-        print_out((char *) &("Failed to send input data"[0]), true);
+        print_out((char *) &("Failed to send weights data"[0]), true);
         return 1;
       }
 
@@ -746,16 +780,18 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
 #ifdef NENCLAVE
       if(verbose >= 2){
-        cout << "Input: " << num_images_this_batch << ' ' << num_neurons << endl;
-        cout << "Weights: " << num_neurons << ' ' << 1 << endl;
-        cout << "GPU result: " << num_result_neurons <<  ' ' << result_batchsize << endl;
+        cout << "Input: " << num_neurons << ' ' << num_images_this_batch << endl;
+        cout << "Weights: " << ' ' << layer_files[layer_idx].neurons << ' ' << (layer_idx ? layer_files[layer_idx-1].neurons : num_pixels) << endl;
+        cout << "GPU result: " << num_result_neurons << ' ' << result_batchsize << endl;
       }
 #endif      
 
       //Validate result with Frievalds' algorithm
       //If it fails, send {-1, -1} back to the GPU and exit
       if(verify_frievald(input_data, layer_data[layer_idx], gpu_result, 
-  num_images_this_batch, num_neurons, num_neurons, 1, num_result_neurons, result_batchsize)){
+          num_neurons, num_images_this_batch,
+          layer_files[layer_idx].neurons, (layer_idx ? layer_files[layer_idx-1].neurons : num_pixels),
+          num_result_neurons, result_batchsize)){
         //Verification failed!
 /*
         int failed_resp[2] = {-1, -1};

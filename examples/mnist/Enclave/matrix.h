@@ -197,5 +197,14 @@ int argmax(float * data, int total_elts){
   return idx;
 }
 
+int nan_idx(const float * data, const int num_elts){
+  for(int i = 0; i < num_elts; i++){
+    if(data[i] != data[i]){
+      return i;
+    }
+  }
+  return -1;
+}
+
 
 #endif

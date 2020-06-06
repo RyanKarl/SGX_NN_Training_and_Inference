@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <libexplain/libexplain.h>
 
 #include "../Enclave/Enclave_Defines.h"
 
@@ -73,6 +74,9 @@ int write_stream(void * buf, size_t total_bytes){
     return 1;
   }
   int res = fwrite((void *) buf, 1, total_bytes, outstream);
+  if(res != (int) total_bytes){
+    fprintf(stderr, "%s\n", explain_fwrite((void *) buf, 1, total_bytes, outstream));
+  }
   fflush(outstream);
   return (res == (int)total_bytes)? 0 : res;
 }
