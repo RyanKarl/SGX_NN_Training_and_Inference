@@ -295,6 +295,8 @@ class SPController:
       except FileExistsError as e:
         continue
         
+  def good():
+    return True if self.proc.poll() is not None else False     
     
 #An example of how to use the SubProcess Controller
 #TODO strip out using std. IO

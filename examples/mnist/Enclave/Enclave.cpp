@@ -49,7 +49,6 @@ void print_floatarr(const float * data, int size){
 }
 #endif
 
-//TODO change index macro to take width
 //0 is height, 1 is width
 int frievald(const float * a, const float * b, const float * c, 
   const int a_height, const int a_width,
@@ -133,7 +132,7 @@ int verify_frievald(const float * a, const float * b, const float * c,
 
 
 int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, 
-  unsigned int & num_pixels, unsigned int & batchsize){
+  unsigned int & num_pixels, unsigned int & batchsize, unsigned int & num_labels){
   
   char str_in[STRUCTURE_BUFLEN] = {'\0'};
 
@@ -155,6 +154,7 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
   batchsize = atoi(strtok(NULL, " \n"));
   num_pixels = atoi(strtok(NULL, " \n"));
   unsigned int num_layers = atoi(strtok(NULL, " \n"));
+  num_labels = atoi(strtok(NULL, " \n"));
   
   layer_files.reserve(num_layers);
 
@@ -184,12 +184,6 @@ int mask(float * input, const float * masks, int input_size, bool negate){
   }
   return 0;
 }
-
-//TODO complete this
-void unmask(float * data, int width, int height, float * mask_data, float * input_layer){
-  return;
-}
-
 
 //Assumes a buffer is allocated
 int read_all_weights(const vector<layer_file_t> & layers, float ** bufs){
@@ -373,13 +367,16 @@ void backwards_demask_ordinary(const float * input, const int input_width, const
     &diffg_difff, &e_w, &e_h, 1);
   matrix_add(e_diffe, diffg_difff, e_w*e_h, e_diffe);
 
-  //TODO set to null
   free(diff_tmp);
+  diff_tmp = NULL;
   free(grad_output_transpose);
+  grad_output_transpose = NULL;
   free(a_randmask);
+  a_randmask = NULL;
   free(weight_mask_weights);
+  weight_mask_weights = NULL;
   free(diffg_difff);
-
+  diffg_difff = NULL;
   free(transformed_transpose);
   transformed_transpose = NULL;
   free(grad_rand_mask_transformed);
@@ -455,56 +452,6 @@ void forward_demask(const float * input, const int input_height, const int input
   free(d3_d);
   d3_d = NULL;
 }
-
-
-
-//TODO fix dimensions
-/*
-//final_data is the softmax'd unmasked last GPU-multiplied matrix, i.e. x, with size of batchsize*num_possible_labels
-float my_cross_entropy_forward(const float * final_data, const int batchsize,
-  const unsigned int * data_labels, const unsigned int * possible_labels, const int num_possible_labels){
-  float * ohe_mean = one_hot_encoding_mean(data_labels, possible_labels, num_possible_labels);
-  //Recall num_neurons is the same as num_possible_labels
-  //float * log_prob = (float *) malloc(sizeof(float)*batchsize*num_possible_labels);
-  float mean_result = 0.0f;
-  for(int i = 0; i < num_possible_labels*batchsize; i++){
-    mean_result -= log(final_data[i])*ohe_mean[i];
-  }
-
-  free(ohe_mean);
-  ohe_mean = NULL;
-}
-
-//https://stackoverflow.com/questions/50999977/what-does-the-gather-function-do-in-pytorch-in-layman-terms
-float * gather_1d(const float * data, const int data_elts, 
-  const float * indices, const int indices_h, const int indices_w){
-  float * ret = (float *) malloc(indices_h*indices_w);
-  for(int h_idx = 0; h_idx < indices_h; h_idx++){
-    for(int w_idx = 0; w_idx < indices_w; w_idx++){
-      int index_idx = (h_idx*indices_w)+w_idx; //Index into the index - naming intentionally bad
-      assert(index_idx >= 0 && index_idx < data_elts);
-      ret[index_idx] = data[indices[index_idx]];
-    }
-  }
-  return ret;
-}
-*/
-
-//Return one-hot encoding - allocates memory
-//Ordered by label, then by dimension
-/*
-float * one_hot_encoding_mean(const unsigned int * labels, 
-  const unsigned int * possible_labels, const int batchsize, const int num_possible_labels){
-  //float ret = 0.0f;
-  float * result_tmp = (float *) malloc(sizeof(float)*batchsize*num_possible_labels);
-  for(int j = 0; j < batchsize; j++){
-    for(int i = 0; i < num_possible_labels; i++){
-      result[i+(j*num_possible_labels)] = (labels[j] == possible_labels[i])? (1.0f/batchsize) : 0.0f;
-    }
-  }
-  return result_tmp;
-}
-*/
 
 //Actual is ground truth - 0 or 1 for each label
 float crossentropy_loss(const unsigned int * actual, const float * predicted,
@@ -645,7 +592,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int num_inputs = 0;
   unsigned int batchsize = 0; 
   unsigned int num_pixels = 0;
-  unsigned int num_possible_labels = 0; //TODO initialize
+  unsigned int num_possible_labels = 0;
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -653,15 +600,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
 #ifndef NENCLAVE
   sgx_status_t ocall_status;
-  int ocall_ret;
 #endif  
+  int ocall_ret;
 
 
 #ifdef NENCLAVE
-  int ocall_ret = init_streams(inpipe_fname, outpipe_fname);
+  ocall_ret = init_streams(inpipe_fname, outpipe_fname);
 #else
   ocall_status = init_streams(&ocall_ret, inpipe_fname, outpipe_fname);
-  //TODO check result
 #endif  
   if(ocall_ret){
     print_out((char *) &("ERROR: could not initialize I/O streams"[0]), true);
@@ -673,7 +619,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   
 
   if(parse_structure(network_structure_fname, layer_files, 
-    num_inputs, num_pixels, batchsize)){
+    num_inputs, num_pixels, batchsize, num_possible_labels)){
     print_out((char *) &("Network parsing failed!"[0]), true);
     return 1;
   }
@@ -873,14 +819,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     } //layer_idx
 
-    //max_indices[i] stores the ith input's final prediction
-    //Is this necessary?
-    /*
-    unsigned int * max_indices = (unsigned int *) malloc(sizeof(unsigned int) * num_possible_labels);
-    for(int i = 0; i < num_possible_labels; i++){
-      max_indices[i] = argmax(final_data+(i*num_possible_labels), num_possible_labels);
-    }
-    */
+
     if(backprop){
         //Loss for the whole batch
       float batch_loss = crossentropy_loss(data_labels, final_data, num_possible_labels, num_images_this_batch);
@@ -892,11 +831,23 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out((char *) &(loss_str.c_str()[0]), false);
       }
 
-      //TODO Traverse layers backwards and do backprop
       for(int rev_layer_idx = num_layers-1; rev_layer_idx >= 0; rev_layer_idx--){
 
         if(rev_layer_idx == (int)num_layers-1){
-          //TODO Call backwards demasking for softmax
+          float * d_ret = NULL;
+          backwards_demask_lastlayer(input_data, num_images_this_batch, layer_files[rev_layer_idx-1].neurons,
+            final_data, num_images_this_batch, layer_files[rev_layer_idx].neurons,
+            layer_data[rev_layer_idx], layer_files[rev_layer_idx-1].neurons, layer_files[rev_layer_idx].neurons,
+            derivative, num_possible_labels, num_images_this_batch,
+            &d_ret);
+
+
+          free(input_data);
+          input_data = NULL;
+
+          free(derivative);
+          derivative = NULL;
+          derivative = d_ret;
 
           continue;
         }
@@ -910,7 +861,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         rand_bytes((unsigned char *) deriv_mask, sizeof(float)*num_images_this_batch*layer_files[rev_layer_idx].neurons);
         //final_data now used for the next level
         mask(final_data, rev_mask_input, num_images_this_batch*layer_files[rev_layer_idx].neurons, 0);
-        mask(layer_data[rev_layer_idx], rev_mask_weights, layer_files[rev_layer_idx].neurons, 0);
+        mask(layer_data[rev_layer_idx], rev_mask_weights, layer_files[rev_layer_idx-1].neurons*layer_files[rev_layer_idx].neurons, 0);
         mask(derivative, deriv_mask, num_images_this_batch*layer_files[rev_layer_idx].neurons, 0);
         //Send out to GPU
         if(send_to_gpu(final_data, num_images_this_batch, layer_files[rev_layer_idx].neurons, verbose)){
@@ -946,33 +897,38 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         assert(deriv_batchsize == (int) num_images_this_batch);
 
         //Also read back this layer's feed-forward output from the GPU for convenience
-        //TODO free these when done
+        //This is a tradeoff of communication vs. memory
         float * layer_forward_data;
         int fwd_w, fwd_h;
         if(receive_from_gpu(&layer_forward_data, &fwd_w, &fwd_h, verbose)){
           print_out((char *) &("Failed to receive feed-forward data from GPU"[0]), true);
           return 1;
         }
+
         float * output_data;
         int output_w, output_h;
         if(receive_from_gpu(&output_data, &output_w, &output_h, verbose)){
           print_out((char *) &("Failed to receive output data from GPU"[0]), true);
           return 1;
         }
-        float * weights_mask;
-        int weights_mask_w, weights_mask_h;
-        if(receive_from_gpu(&weights_mask, &weights_mask_w, &weights_mask_h, verbose)){
+/*
+        float * weights_masked;
+        int weights_masked_w, weights_masked_h;
+        if(receive_from_gpu(&weights_masked, &weights_masked_w, &weights_masked_h, verbose)){
           print_out((char *) &("Failed to receive weights mask data from GPU"[0]), true);
           return 1;
         }        
+        assert(weights_masked_w == (rev_layer_idx? layer_files[rev_layer_idx-1].neurons : num_pixels));
+        assert(weights_masked_h == (int) layer_files[rev_layer_idx].neurons);
+*/
         float * grad_mask;
         int grad_mask_w, grad_mask_h;
         if(receive_from_gpu(&grad_mask, &grad_mask_w, &grad_mask_h, verbose)){
           print_out((char *) &("Failed to receive gradient mask data from GPU"[0]), true);
           return 1;
         }
-        assert(weights_mask_w == 1);
-        assert(weights_mask_h == (int) layer_files[rev_layer_idx].neurons);
+
+        
 
 
         //Verify with Frievalds' algorithm
@@ -988,31 +944,46 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           //return 1;
         }
 
-        float * e_weights;
-        float * d_derivative;
+        float * e_weights = NULL;
+        float * d_derivative = NULL;
 
+        //Unmask weights before demasking
+        mask(layer_data[rev_layer_idx], rev_mask_weights, 
+          layer_files[rev_layer_idx+1].neurons*layer_files[rev_layer_idx].neurons, 1);
         //Figure out args for backwards demasking 
         backwards_demask_ordinary(layer_forward_data, fwd_w, fwd_h,
           rev_mask_input, 
           output_data, output_w, output_h,
           layer_data[rev_layer_idx], layer_files[rev_layer_idx+1].neurons, layer_files[rev_layer_idx].neurons,
-          weights_mask, 
+          rev_mask_weights, 
           derivative, output_w, output_h,
           grad_mask, 
           &d_derivative, &e_weights);
 
-        //TODO update this layer's weights TODO check with Mark we did this right
-        update_weights(layer_data[rev_layer_idx], d_derivative, 
+        update_weights(layer_data[rev_layer_idx], e_weights, 
           layer_files[rev_layer_idx+1].neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
 
-        //TODO set up things for next loop
+        //Get derivative ready for next round
+        free(derivative);
+        derivative = NULL;
+        derivative = d_derivative;
+        d_derivative = NULL;
 
+
+        free(layer_forward_data);
+        layer_forward_data = NULL;
+        free(output_data);
+        output_data = NULL;
+        /*
+        free(weights_masked);
+        weights_masked = NULL;
+        */
+        free(grad_mask);
+        grad_mask = NULL;
 
 
         free(e_weights);
-        e_weights = NULL;
-        free(d_derivative);
-        d_derivative = NULL;
+        e_weights = NULL;        
 
 
         free(rev_mask_input);
