@@ -297,7 +297,7 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
     const float * weights, const int weights_width, const int weights_height,
     //const float * weights_masks,
     const float * grad_output, const int grad_output_width, const int grad_output_height,
-    float ** d_ret
+    float ** d_ret, float ** e_ret
     //int * re_w, int * ret_w
     ){
   //final_data is softmax(a*b.t)
@@ -340,16 +340,30 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
 
   free(b_transpose);
   b_transpose = NULL;
+  
+  //Calculate e_ret as c.t() @ input
+  //First transpose c
+  float * c_t = transpose(c_prod, input_width, input_height);
   free(c_prod);
   c_prod = NULL;
+  int e_w, e_h;
+  matrix_multiply(c_t, input_height, input_width, //Swapped for transpose
+    input, input_width, input_height,
+    e_ret, e_w, e_h);
+
+  free(c_t);
+  c_t = NULL;
+
+  return;
 }
 
 
+//TODO create and use grad_mask
 int backwards_demask_ordinary(const float * input, const int input_width, const int input_height,
   const float * input_mask, 
   const float * outputs, const int outputs_width, const int outputs_height,
   const float * weights, const int weights_width, const int weights_height, const float * weights_mask,
-  const float * grad_output, const int grad_output_width, const int grad_output_height, const float * grad_mask,
+  const float * grad_output, const int grad_output_width, const int grad_output_height,
   float ** d_ret, float ** e_ret, int verbose = 0){
 
   //float * weight_rand_mask_transpose = (float *) malloc(sizeof(float) * weight_height * weights_width); 
@@ -1029,7 +1043,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         mask(layer_data[layer_idx], mask_weights, num_neurons, true);
       }
       else{
-        gpu_unmasked_result = gpu_result;
+         gpu_unmasked_result = gpu_result;
          gpu_unmasked_h = result_batchsize;
          gpu_unmasked_w = layer_files[layer_idx].neurons;
       }
@@ -1106,13 +1120,19 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
         if(rev_layer_idx == (int)num_layers-1){
           float * d_ret = NULL;
+          float * e_ret = NULL;
           backwards_demask_lastlayer(input_data, num_images_this_batch, layer_files[rev_layer_idx-1].neurons,
             final_data, num_images_this_batch, layer_files[rev_layer_idx].neurons,
             layer_data[rev_layer_idx], layer_files[rev_layer_idx-1].neurons, layer_files[rev_layer_idx].neurons,
             derivative, num_possible_labels, num_images_this_batch,
-            &d_ret);
+            &d_ret, &e_ret);
 
+          //Update weights
+          update_weights(layer_data[rev_layer_idx], e_ret, 
+            layer_files[rev_layer_idx-1].neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
 
+          free(e_ret);
+          e_ret = NULL;
           free(input_data);
           input_data = NULL;
 
@@ -1125,16 +1145,36 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
         int num_neurons = rev_layer_idx ? layer_files[rev_layer_idx-1] : num_pixels;
 
+        float * d_ret = NULL;
+        float * e_ret = NULL;
         int demask_result = backwards_demask_ordinary(activated_input[rev_layer_idx], num_neurons, num_images_this_batch,
-          const float * input_mask, 
-          const float * outputs, const int outputs_width, const int outputs_height,
-          const float * weights, const int weights_width, const int weights_height, const float * weights_mask,
-          const float * grad_output, const int grad_output_width, const int grad_output_height, const float * grad_mask,
-          float ** d_ret, float ** e_ret, verbose);
+          input_masks[rev_layer_idx], 
+          unactivated_outputs[rev_layer_idx], layer_files[rev_layer_idx].neurons, num_images_this_batch,
+          layer_data[rev_layer_idx], layer_files[rev_layer_idx].neurons, num_neurons,
+          weights_mask[rev_layer_idx],
+          derivative, layer_files[rev_layer_idx].neurons, num_images_this_batch,
+          &d_ret, &e_ret, verbose);
 
+        free(derivative);
+        derivative = NULL;
+        derivative = d_ret;
 
+        //Update weights with e_ret
+        update_weights(layer_data[rev_layer_idx], e_ret, 
+          neurons*layer_files[rev_layer_idx].neurons*num_neurons, LEARNING_RATE);
+
+        free(e_ret);
+        e_ret = NULL;
+        free(activated_input[rev_layer_idx]);
+        activated_input[rev_layer_idx] = NULL;
+        free(input_masks[rev_layer_idx]);
+        input_masks[rev_layer_idx] = NULL;
+        free(unactivated_outputs[rev_layer_idx]);
+        unactivated_outputs[rev_layer_idx] = NULL;
+        free(weights_mask[rev_layer_idx]);
+        weights_mask[rev_layer_idx] = NULL;
         
-      }
+      } //rev_layer_idx
 
       //Free up labels
       free(data_labels);
@@ -1143,8 +1183,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       free(derivative);
       derivative = NULL;
 
+      //Free saved data buffers
+      free(activated_input);
+      activated_input = NULL;
+      free(input_masks);
+      input_masks = NULL;
+      free(unactivated_outputs);
+      unactivated_outputs = NULL;
+      free(weights_mask);
+      weights_mask = NULL;
 
-    } //rev_layer_idx
+    } //if(backprop)
 
 
     
