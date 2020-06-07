@@ -62,9 +62,9 @@ void print_floatarr(const float * data, int size){
 
 //0 is height, 1 is width
 int frievald(const float * a, const float * b, const float * c, 
-  const int a_height, const int a_width,
-  const int b_height, const int b_width, 
-  const int c_height, const int c_width)
+  const int a_width, const int a_height, 
+  const int b_width, const int b_height,  
+   const int c_width, const int c_height)
 {
   //Mult. is defined
   assert(a_width == b_height);
@@ -80,24 +80,35 @@ int frievald(const float * a, const float * b, const float * c,
     r[i] = (float) (rand_byte & 1);
   }
 
-  //Hope that calloc properly sets bits to 0
-  //Calculate br, cr in the same loop
-  float * br;
+  /*
+  cout << "r: \n";
+  print_floatmat(r, b_width, 1);
+  */
+
+  float * br = NULL;
   int br_w, br_h;
-  float * cr;
+  float * cr = NULL;
   int cr_w, cr_h;
   
   matrix_multiply(b, b_width, b_height, 
     r, 1, b_width,
-    &br, &br_w, &br_h, 0);
+    &br, &br_w, &br_h, 0, 1);
   assert(br_h == a_width);
   assert(br_w == 1);
 
   matrix_multiply(c, c_width, c_height,
     r, 1, c_width,
-    &cr, &cr_w, &cr_h, 0);
+    &cr, &cr_w, &cr_h, 0, 1);
   assert(cr_h == c_height);
   assert(cr_w == 1);
+  
+  /*
+  cout << "br: \n";
+  print_floatmat(br, br_h, br_w);
+  
+  cout << "cr: \n";
+  print_floatmat(cr, cr_h, cr_w);
+  */
 
   free(r);
   r = NULL;
@@ -110,10 +121,14 @@ int frievald(const float * a, const float * b, const float * c,
 
   free(br);
   br = NULL;
-
-  for (int i = 0; i < c_width; i++){
+  /*
+  cout << "axbr: \n";
+  print_floatmat(axbr, axbr_h, axbr_w);
+  */
+  for (int i = 0; i < cr_h; i++){
     //cout << "axbr[" << i << "] " << axbr[i] << " cr[" << i << "] " << cr[i] << endl;
     if (FLOAT_CMP(axbr[i], cr[i])){    
+        cout << "axbr " << axbr[i] << " cr " << cr[i] << " i " << i << endl;
         free(axbr);
         free(cr);
         axbr = cr = NULL;
@@ -134,7 +149,11 @@ int verify_frievald(const float * a, const float * b, const float * c,
     const int b_width, const int b_height,
     const int c_width, const int c_height){
   for(unsigned int j = 0; j < K_PROBABILITY; j++){
-  	if(frievald(a, b, c, a_height, a_width, b_height, b_width, c_height, c_width)){
+  	if(frievald(a, b, c, 
+        a_width, a_height, 
+        b_width, b_height,
+        c_width, c_height)){
+      cout << "Frievalds' failed on pass " << j << endl;
   		return 1;
   	}
   }
@@ -797,6 +816,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         &enc_mul_test, &test_w, &test_h, 0, 1);
       assert(test_w == num_result_neurons);
       assert(test_h == result_batchsize);
+
       for(int i = 0; i < test_w * test_h; i++){
         assert(!FLOAT_CMP(enc_mul_test[i], gpu_result[i]));
       }

@@ -1,6 +1,6 @@
 //App.cpp
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
-//g++ App/App.cpp Enclave/Enclave.cpp -pedantic -Wall  -O3 -o ./app -lm -lexplain -DNENCLAVE
+//g++ App/App.cpp Enclave/Enclave.cpp -pedantic -Wall  -O3 -o ./app -lm -DNENCLAVE
 //./app -s Master_Arch.txt -c fc1.txt -i dummy_gpu.dat -o enclave_out.dat -v -v
 //Defined first to go before other standard libs
 /*
