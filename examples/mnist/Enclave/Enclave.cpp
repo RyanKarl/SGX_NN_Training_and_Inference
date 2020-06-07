@@ -345,6 +345,86 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
 }
 
 
+void backwards_demask_ordinary(const float * input, const int input_width, const int inp     ut_height,const float * input_mask, const float * outputs, const int outputs_width, const int outputs_height, const float * weights, const int weights_width, const int weights_height, const float * weights_mask, const float * grad_output, const int grad_output_width, const int grad_output_height, const float * grad_mask, float ** d_ret, float ** e_ret){
+
+    float * a_mul_wmask = (float *) malloc(sizeof(float) * input_height * weights_width); 
+    int a_mul_wmask_height;
+    int a_mul_wmask_width;
+    
+    float * weight_rand_mask_transpose = (float *) malloc(sizeof(float) * weight_height * weights_width)     ; 
+    float * weight_transpose = (float *) malloc(sizeof(float) * weight_height * weights_width);
+    float * weight_mask_transpose_weights_transpose = (float *) malloc(sizeof(float) * weight_height * weights_     width);
+    float * weight_mask_transpose_weights_transpose_a_prod = (float *) malloc(sizeof(float) * w     eight_height * weights_     width);
+
+    float ** diff_term
+
+    matrix_multiply(input, input_width, input_height, weights_mask, weights_width, weights_height, &a_mul_wmask, a_mul_wmask_width, a_mul_wmask_height, 0, 1);
+    
+      weight_rand_mask_transpose = transpose(weight_ran_mask, weights_width, weights_height);
+      weight_transpose = transpose(weights, weights_width, weights_height); 
+
+      matrix_sub(weight_rand_mask_transpose, weights_transpose, weights_height * weights_width, weight_mask_transpose_weights_transpose)
+
+      matrix_sub(weight_rand_mask_transpose, a_mul_wmask, weights_height * weights_width, weight_mask_transpose_weights_transpose_a_prod)
+
+    matrix_multiply(weight_mask_transpose_weights_transpose_a_prod, weights_width, weights_height, input_mask, input_width, input_height, diff_term, iput_width, weights_height, 0, 1)
+
+    transform_and_mult(grad_output, output, diff_term, grad_output_height * output_width);
+
+
+    float **grm_tramsformed;
+    grm_transformed = transform(grad_rand_mask, diff_term, grad_output_height * output_width);
+
+
+    float * weightmask_b = (float *) malloc(sizeof(float) * weight_height * weights_width);
+    
+    matrix_sub(weight_rand_mask, weights, weight_height*weight_width, weightmask_b);
+
+
+    float ** diffc_diffa;
+
+    matrix_multiply(grm_transformed, grad_output_height, output_width, weightmask_b, weight_width, weight_height, diffc_diffa, grad_output_height, weight_width, 0, 1);
+      
+    float ** diffb;
+
+    diffb = matrix_multiply(grad_output, grad_output_height, grad_output_width, weight_rand_mask, weight_width, weight_height, diffb, grad_output_height, weight_width, 0, 1);
+      
+    
+    float * difftemp = (float *) malloc(sizeof(float) * grad_output_height*weight_width);
+    float * d = (float *) malloc(sizeof(float) * grad_output_height*weight_width)     ;
+    matrix_sub(diffc_diffa, diffb, grad_output_height*weight_width, difftemp);
+    
+    matrix_add(d, difftemp, grad_output_height*weight_width, d);
+ 
+    float ** c_transpose;
+//float * c_transpose = (float *) malloc(sizeof(float) * output_height*output_width)     ; 
+
+    float **diffx;
+  
+    c_transpose = transpose(output, output_width, output_height);
+
+    matrix_multiply(c_transpose, output_height, output_width, input_mask, input_mask_width, input_mask_height, diffx, input_mask_width, output_height, 0, 1)
+
+    grm_transformed_transposed = transpose(grm_transformed_transposed, grad_output_height, output_width);
+
+    float ** rand_mask_a = (float *) malloc(sizeof(float) * input_mask_height*a_width);
+    matrix_add(rand_mask, a, input_mask_height*a, rand_mask_a);
+
+
+    float ** diffz_diffy;
+    matrix_multiply(grm_transformed_transposed, grad_output_height, output_width, rand_mask_a, input_height, input_width, diffz_diffy, grad_output_height, input_width, 0, 1);
+
+    float ** e = (float *) malloc(sizeof(float) * grad_output_height*input_width);
+    matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
+    matrix_add(e, diffz_diffy, input_mask_height*a, e);
+
+    //e += diffz_diffy - diffx 
+
+
+
+}
+
+/*
 void backwards_demask_ordinary(const float * input, const int input_width, const int input_height,
     const float * input_mask, 
     const float * outputs, const int outputs_width, const int outputs_height,
@@ -436,7 +516,7 @@ void backwards_demask_ordinary(const float * input, const int input_width, const
   return;
 
 }
-
+*/
 void forward_demask(const float * input, const int input_width, const int input_height,
   const float * input_masks, 
   const float * weights, const int weights_width, const int weights_height,
