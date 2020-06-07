@@ -807,6 +807,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 #endif      
 
       //DEBUG FRIEVALD
+/*      
 #ifdef NENCLAVE
       //Test multiplication
       float * enc_mul_test = NULL;
@@ -831,6 +832,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       free(enc_mul_test);
       enc_mul_test = NULL;
 #endif      
+*/
 
       //Validate result with Frievalds' algorithm
       //If it fails, send {-1, -1} back to the GPU and exit
@@ -930,6 +932,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
 
     if(backprop){
+
+      if(verbose >= 2){
+#ifdef NENCLAVE
+        cout << "Starting backpropagation...\n";
+#endif        
+      }
+
         //Loss for the whole batch
       float batch_loss = crossentropy_loss(data_labels, final_data, num_possible_labels, num_images_this_batch);
       float * derivative = crossentropy_derivative(data_labels, final_data, num_possible_labels, num_images_this_batch);

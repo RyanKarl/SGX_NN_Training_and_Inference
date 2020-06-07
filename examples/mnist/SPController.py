@@ -14,7 +14,10 @@ TMPDIR = "/tmp/"
 #Name is of the writer
 FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
 INT_BYTES = 4
+
+NP_FLOATYPE = np.float32
 FLOAT_BYTES = 4
+
 # endianess
 BYTEORDER = sys.byteorder
 DATA_DIMENSIONS = 3
@@ -24,6 +27,8 @@ NUM_MATRICES = 3
 MAT_DIM = 2
 BUFFERING=-1
 
+DO_BACKPROP = True
+
 #Hardcoded names
 INPUT_FILE = 'fc1.txt'
 ARCH_FILE = 'Master_Arch.txt'
@@ -32,7 +37,7 @@ LAYER_FILE = 'weights16.txt'
 class SPController:
 
   #Initialization does not actually start subprocess
-  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False, use_std_io=False):
+  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False, use_std_io=False, do_backprop=DO_BACKPROP):
     self.pipe_names = pipe_names
     for producer, filepath in self.pipe_names.items():
       #Clear any previous file
@@ -45,6 +50,8 @@ class SPController:
     self.args = list()   
     self.debug = debug 
     self.args = [enclave_executable, "-i", self.pipe_names["gpu"], "-o", self.pipe_names["enclave"]]
+    if do_backprop:
+      self.args += ['-b']
     self.use_std_io = use_std_io
     if not use_std_io:
       self.args += ["-c", INPUT_FILE, "-s", ARCH_FILE]
@@ -170,12 +177,12 @@ class SPController:
     
     #Unpacks bytes into array of floats
     float_resp = np.asarray([struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)])
-    return np.reshape(float_resp, response_sizes)
+    return np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)
 
   
   #TODO figure out return vals
   def send_to_enclave(self, mult_result):  
-    output_data = SPController.validate_one_matrix(mult_result)
+    output_data = SPController.validate_one_matrix(mult_result.astype(NP_FLOATYPE))
     if output_data is None:
       print("Bad input")
       return None
@@ -275,7 +282,7 @@ class SPController:
     
     #Unpacks bytes into array of floats
     float_resp = [struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)]
-    return np.reshape(float_resp, response_sizes)
+    return np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)
     
   def close(self, force=True, cleanup=True):
     if not force:
@@ -295,7 +302,7 @@ class SPController:
       except FileExistsError as e:
         continue
         
-  def good():
+  def good(self):
     return True if self.proc.poll() is None else False     
     
 #An example of how to use the SubProcess Controller
@@ -332,7 +339,7 @@ def main():
       print(str(b))   
       print(b.shape)
       
-    c = a @ b.transpose()
+    c = a @ b
     print("GPU's result:")
     print(str(c))
     spc.send_to_enclave(c)  
