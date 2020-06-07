@@ -284,9 +284,9 @@ def SGXB(grad_output, input, weight, output):
     
     #Receive(e = c.t() @ a)
 
-    diffa = c.t() @ rand_mask
-    diffb = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ a 
-    diffc = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ rand_mask
+    diffx = c.t() @ rand_mask
+    diffy = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ a 
+    diffz = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ rand_mask
 
     e = e - diffa - diffb + diffc    
 
