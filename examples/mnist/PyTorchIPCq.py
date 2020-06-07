@@ -255,6 +255,7 @@ def SGXF(input, weight):
     except:
         return out
 
+def transform(y, g, term)
 
 def SGXB(grad_output, input, weight, output):
     
@@ -267,28 +268,37 @@ def SGXB(grad_output, input, weight, output):
     c = grad_output.clone()
     g = output.clone()
 
-    diff = rand_mask @ b.t()
-    diff2 = a @ weight_rand_mask.t()
-    diff3 = rand_mask @ weight_rand_mask.t()
-    c = c * (1-torch.tanh(g  - diff - diff2 + diff3)**2)
+    #diff = rand_mask @ b.t()
+    #diff2 = a @ weight_rand_mask.t()
+    #diff3 = rand_mask @ weight_rand_mask.t()
+    #diff_term = diff3 - diff2 - diff1
+    diff_term = (rand_mask @ (weight_rand_mask.t() - b.t())) - (a @ weight_rand_mask)
+    #c = c * (1-torch.tanh(g + diff_term)**2)
+    transform_and_mult(c, g, term)
    
     #Send(c matrix to GPU)
     #Receive(d = c @ b)
 
-    diffa = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2) @ b
+
+    grm_transformed = transform(grad_rand_mask, diff_term)
+    diffc_diffa = grm_transformed @ (weight_rand_mask - b)
+    #diffa = (1-torch.tanh(grad_rand_mask + diff_term)**2) @ b
     diffb = c @ weight_rand_mask
-    diffc = (1-torch.tanh(grad_rand_mask- diff - diff2 + diff3)**2) @ weight_rand_mask
-    d = d - diffa - diffb + diffc
-    ct = grad_output.clone() - grad_rand_mask
-    ct = ct * (1-torch.tanh(g  - diff - diff2 + diff3)**2)
+    #diffc = (1-torch.tanh(grad_rand_mask + diff_term)**2) @ weight_rand_mask
+    
+    d += diffc_diffa - diffb
+    #ct = grad_output.clone() - grad_rand_mask
+    #transform(ct, g, diff_term)
+    #ct = ct * (1-torch.tanh(g + diff_term)**2)
     
     #Receive(e = c.t() @ a)
 
     diffx = c.t() @ rand_mask
-    diffy = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ a 
-    diffz = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ rand_mask
+    #diffy = grm_transformed.t() @ a 
+    #diffz = grm_transformed.t() @ rand_mask
+    diffz_diffy = grm_transformed.t() @ (rand_mask - a)
 
-    e = e - diffa - diffb + diffc    
+    e += diffz_diffy - diffx  
 
     return d + super_mega_mask[0:d.shape[0], 0:d.shape[1]], e + weight_rand_mask 
 
