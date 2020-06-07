@@ -104,7 +104,6 @@ def SGXBL(grad_output, input, weight):
 
     weight_rand_mask = super_mega_mask[0:e.shape[0], 0:e.shape[1]]
 
-    return d + super_mega_mask[0:d.shape[0], 0:d.shape[1]], e + weight_rand_mask
 
 class MyFunction3(Function):
     # Note that both forward and backward are @staticmethods
@@ -259,86 +258,37 @@ def SGXF(input, weight):
 
 def SGXB(grad_output, input, weight, output):
     
-    # print(grad_output.shape)
     rand_mask = super_mega_mask[0:input.shape[0], 0:input.shape[1]]
     weight_rand_mask = super_mega_mask[0:weight.shape[0], 0:weight.shape[1]]
-    
-
-
-    #128,784
-    a = input #- rand_mask
-
-    #500,784
-    b = weight #- weight_rand_mask
-
-
-
-    
-    
-    c = grad_output.clone() #- 1
-
     grad_rand_mask = super_mega_mask[0:c.shape[0], 0:c.shape[1]]
 
-    # print(c.shape, a.shape, b.shape)
-
-    #tanh(c) + mask
+    a = input 
+    b = weight 
+    c = grad_output.clone()
     g = output.clone()
 
-
-    f = a @ b.t()
     diff = rand_mask @ b.t()
     diff2 = a @ weight_rand_mask.t()
     diff3 = rand_mask @ weight_rand_mask.t()
-    #128,500
     c = c * (1-torch.tanh(g  - diff - diff2 + diff3)**2)
-    
-
-    # c = c * (torch.sigmoid(a @ b.t()) * (1 - torch.sigmoid(a @ b.t())))
-
-    # ahh = (torch.relu(a @ b.t()) / (a @ b.t())) * 0
-
-    # ahh[torch.isnan(ahh)] = 0
-
-    # c *= ahh
-    # try:
-    # c[(g  - diff - diff2 + diff) <= 0] = 0
-    # except:
-    #     c[(a @ b.t()) <= 0] = 0
-    # a = 1-torch.tanh(a)**2
-
-
-    #128, 500 x 500, 784
-    d = c @ b
+   
+    #Send(c matrix to GPU)
+    #Receive(d = c @ b)
 
     diffa = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2) @ b
     diffb = c @ weight_rand_mask
-
     diffc = (1-torch.tanh(grad_rand_mask- diff - diff2 + diff3)**2) @ weight_rand_mask
-
     d = d - diffa - diffb + diffc
-
     ct = grad_output.clone() - grad_rand_mask
     ct = ct * (1-torch.tanh(g  - diff - diff2 + diff3)**2)
-
-    # print((d) - (ct @ b))
-
-    #500, 128 x 128, 784
-    e = c.t().mm(a)
+    
+    #Receive(e = c.t() @ a)
 
     diffa = c.t() @ rand_mask
     diffb = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ a 
-
     diffc = (1-torch.tanh(grad_rand_mask - diff - diff2 + diff3)**2).t() @ rand_mask
 
     e = e - diffa - diffb + diffc    
-
-    # print((e) - (ct.t() @ a))
-
-    
-    # print(e)
-
-    rand_mask = torch.ones(d.shape, device = "cuda:0")
-    weight_rand_mask = super_mega_mask[0:e.shape[0], 0:e.shape[1]]
 
     return d + super_mega_mask[0:d.shape[0], 0:d.shape[1]], e + weight_rand_mask 
 
