@@ -289,6 +289,95 @@ void print_layer_info(const vector<layer_file_t> & layers){
   return;
 }
 
+
+
+int send_to_gpu(const float * data, const int batchsize, const int num_neurons, const int verbose){
+  //Send it and a layer of weights to the GPU
+  //Send first dimensions, then data (twice)
+  int out_dims[2] = {batchsize, num_neurons};
+ 
+#ifdef NENCLAVE
+  int written = write_stream((void *) out_dims, sizeof(out_dims));
+  if(written){
+    print_out((char *) &("Failed writing matrix dimensions"[0]), true);
+    cout << written << " bytes sent" << endl;        
+    return 1;
+  }
+#else
+  sgx_status_t ocall_status;
+  int ocall_ret;
+
+  ocall_status = write_stream(&ocall_ret, (void *) out_dims, sizeof(out_dims));
+  if(ocall_ret){
+    print_out((char *) &("Failed writing matrix dimensions"[0]), true);
+    return 1;
+  }
+#endif      
+  if(verbose){
+    print_out((char *) &("Sent matrix dimensions"[0]), false);   
+  }    
+ 
+#ifdef NENCLAVE  
+  if(write_stream((void *) data, sizeof(float)*batchsize*num_neurons)){
+    print_out((char *) &("Failed writing matrix"[0]), true);
+    return 1;
+  }
+#else
+  ocall_status = write_stream(&ocall_ret, (void *) data, sizeof(float)*batchsize*num_neurons);
+  if(ocall_ret){
+    print_out((char *) &("Failed writing matrix"[0]), true);
+    return 1;
+  }
+#endif
+  return 0;
+}
+
+int receive_from_gpu(float ** result, int * num_neurons, int * batchsize, const int verbose){
+  //Get back a result C ?= A*B
+  //Read in dimensions, then data
+  int in_dims[2] = {0, 0};
+#ifdef NENCLAVE      
+  if(read_stream((void *) in_dims, sizeof(in_dims))){
+    print_out((char *) &("Failed reading in result dimensions"[0]), true);
+    return 1;
+  }
+#else
+  sgx_status_t ocall_status;
+  int ocall_ret;
+
+  ocall_status = read_stream(&ocall_ret, (void *) in_dims, sizeof(in_dims));
+  if(ocall_ret){
+    print_out((char *) &("Failed reading in result dimensions"[0]), true);
+    return 1;
+  }
+#endif      
+  if(verbose){
+    print_out((char *) &("Read in result dimensions"[0]), false);
+  }
+
+  *batchsize = in_dims[0];
+  *num_neurons = in_dims[1];
+  
+
+  *result = (float *) malloc(sizeof(float)*(*num_neurons)*(*batchsize));
+#ifdef NENCLAVE
+  if(read_stream((void *) *result, sizeof(float)*(*num_neurons)*(*batchsize))){
+    print_out((char *) &("Failed reading result result"[0]), true);
+    return 1;
+  }
+#else
+  ocall_status = read_stream(&ocall_ret, (void *) *result, sizeof(float)*(*num_neurons)*(*batchsize));
+  if(ocall_ret){
+    print_out((char *) &("Failed reading in result"[0]), true);
+    return 1;
+  }
+#endif      
+  if(verbose){
+    print_out((char *) &("Read in result"[0]), false);
+  }
+  return 0;
+}
+
 //For inputs: read in entire batches to enclave memory from ordinary file through OCALLs, and free() data when done.
 
 void backwards_demask_lastlayer(const float * input, const int input_width, const int input_height,
@@ -349,7 +438,7 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
   int e_w, e_h;
   matrix_multiply(c_t, input_height, input_width, //Swapped for transpose
     input, input_width, input_height,
-    e_ret, e_w, e_h);
+    e_ret, &e_w, &e_h);
 
   free(c_t);
   c_t = NULL;
@@ -362,7 +451,8 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
 int backwards_demask_ordinary(const float * input, const int input_width, const int input_height,
   const float * input_mask, 
   const float * outputs, const int outputs_width, const int outputs_height,
-  const float * weights, const int weights_width, const int weights_height, const float * weights_mask,
+  const float * weights, const int weights_width, const int weights_height,
+  const float * weights_mask,
   const float * grad_output, const int grad_output_width, const int grad_output_height,
   float ** d_ret, float ** e_ret, int verbose = 0){
 
@@ -373,14 +463,16 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   int a_mul_wmask_height;
   int a_mul_wmask_width;
 
+  float * grad_rand_mask = NULL; //TODO use me
+
   matrix_multiply(input, input_width, input_height, 
     weights_mask, weights_width, weights_height,
      &a_mul_wmask, &a_mul_wmask_width, &a_mul_wmask_height);
 
-  float * weight_mask_transpose_weights_transpose = (float *) malloc(sizeof(float) * weight_height * weights_width);
-  float * weight_mask_transpose_weights_transpose_a_prod = (float *) malloc(sizeof(float) * weight_height * weights_width);
+  float * weight_mask_transpose_weights_transpose = (float *) malloc(sizeof(float) * weights_height * weights_width);
+  float * weight_mask_transpose_weights_transpose_a_prod = (float *) malloc(sizeof(float) * weights_height * weights_width);
   
-  float * weight_rand_mask_transpose = transpose(weight_ran_mask, weights_width, weights_height);
+  float * weight_rand_mask_transpose = transpose(weights_mask, weights_width, weights_height);
   float * weights_transpose = transpose(weights, weights_width, weights_height); //might need later
 
   matrix_sub(weight_rand_mask_transpose, weights_transpose, weights_height * weights_width, weight_mask_transpose_weights_transpose);
@@ -408,30 +500,30 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   free(weight_mask_transpose_weights_transpose_a_prod);
   weight_mask_transpose_weights_transpose_a_prod = NULL;
 
-  float * c_transformed = (float *) malloc(sizeof(float) * grad_output_height * output_width);
-  transform_and_mult(grad_output, output, diff_term, c_transformed, grad_output_height * output_width);
+  float * c_transformed = (float *) malloc(sizeof(float) * grad_output_height * outputs_width);
+  transform_and_mult(grad_output, outputs, diff_term, c_transformed, grad_output_height * outputs_width);
 
-  float * grm_transformed = transform(grad_rand_mask, diff_term, grad_output_height * output_width);
+  float * grm_transformed = transform(grad_rand_mask, diff_term, grad_output_height * outputs_width);
 
   free(diff_term);
   diff_term = NULL;
 
-  float * weightmask_b = (float *) malloc(sizeof(float) * weight_height * weights_width);
-  matrix_sub(weight_rand_mask, weights, weight_height*weight_width, weightmask_b);
+  float * weightmask_b = (float *) malloc(sizeof(float) * weights_height * weights_width);
+  matrix_sub(weights_mask, weights, weights_height*weights_width, weightmask_b);
 
 
   float * diffc_diffa;
   int diffc_diffa_w, diffc_diffa_h;
 
-  matrix_multiply(grm_transformed, grad_output_height, output_width,
-   weightmask_b, weight_width, weight_height,
+  matrix_multiply(grm_transformed, grad_output_height, outputs_width,
+   weightmask_b, weights_width, weights_height,
    &diffc_diffa, &diffc_diffa_w, &diffc_diffa_h);
     
   float * diffb;
   int diffb_w, diffb_h;
 
   matrix_multiply(c_transformed, grad_output_height, grad_output_width,
-    weight_rand_mask, weight_width, weight_height, 
+    weights_mask, weights_width, weights_height, 
     &diffb, &diffb_w, &diffb_h, 0, 1);
     
   //Send c_transformed to GPU  '
@@ -447,23 +539,24 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
     return 1;
   }
   //Verify
-  if(verify_frievald(c_transformed, grad_output_height, grad_output_width,
-      weights, weights_width, weights_height,
-      d, d_w, d_h)){
+  if(verify_frievald(c_transformed, weights, d,
+      grad_output_height, grad_output_width,
+      weights_width, weights_height,
+      d_w, d_h)){
     print_out((char *) &("Frievalds' algorithm failed on d"[0]), true);
     return 1;
   }
   
-  float * difftemp = (float *) malloc(sizeof(float) * grad_output_height*weight_width);
+  float * difftemp = (float *) malloc(sizeof(float) * grad_output_height*weights_width);
   
-  matrix_sub(diffc_diffa, diffb, grad_output_height*weight_width, difftemp);
+  matrix_sub(diffc_diffa, diffb, grad_output_height*weights_width, difftemp);
 
   free(diffc_diffa);
   diffc_diffa = NULL;
   free(diffb);
   diffb = NULL;
   
-  matrix_add(d, difftemp, grad_output_height*weight_width, d);
+  matrix_add(d, difftemp, grad_output_height*weights_width, d);
 
   free(difftemp);
   difftemp = NULL;
@@ -471,27 +564,27 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   float * diffx;
   int diffx_w, diffx_h;
 
-  float * c_transpose = transpose(c_transformed, output_width, output_height);
+  float * c_transpose = transpose(c_transformed, outputs_width, outputs_height);
 
-  matrix_multiply(c_transpose, output_height, output_width,
-    input_mask, input_mask_width, input_mask_height,
+  matrix_multiply(c_transpose, outputs_height, outputs_width,
+    input_mask, input_width, input_height,
     &diffx, &diffx_w, &diffx_h);
 
   free(c_transpose);
   c_transpose = NULL;
 
-  float * grm_transformed_transposed = transpose(grm_transformed, grad_output_width, output_height);
+  float * grm_transformed_transposed = transpose(grm_transformed, grad_output_width, outputs_height);
 
   free(grm_transformed);
   grm_transformed = NULL;
 
-  float * rand_mask_a = (float *) malloc(sizeof(float) * input_mask_height*a_width);
-  matrix_add(rand_mask, a, input_mask_height*a, rand_mask_a);
+  float * rand_mask_a = (float *) malloc(sizeof(float) * input_height*input_width);
+  matrix_add(input_mask, input, input_height*input_width, rand_mask_a);
 
 
   float * diffz_diffy;
   int diffz_diffy_w, diffz_diffy_h;
-  matrix_multiply(grm_transformed_transposed, grad_output_height, output_width, 
+  matrix_multiply(grm_transformed_transposed, grad_output_height, outputs_width, 
     rand_mask_a, input_height, input_width, //Reversed due to transposition
      &diffz_diffy, &diffz_diffy_w, &diffz_diffy_h);
 
@@ -511,9 +604,10 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   //Verify that e == c_transformed.t() @ a
   //First, get transposed of c_transformed
   float * c_t_t = transpose(c_transformed, grad_output_width, grad_output_height);
-  if(verify_frievald(c_t_t, grad_output_height, grad_output_width,
-      inputs, input_width, input_height,
-      e, e_w, e_h)){
+  if(verify_frievald(c_t_t, input, e,
+      grad_output_height, grad_output_width,
+      input_width, input_height,
+      e_w, e_h)){
     print_out((char *) &("Frievalds' algorithm failed on e"[0]), true);
     return 1;
   }
@@ -524,7 +618,7 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   c_t_t = NULL;
 
   matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
-  matrix_add(e, diffz_diffy, input_mask_height*a, e);
+  matrix_add(e, diffz_diffy, input_height*input_width, e);
 
   free(diffz_diffy);
   diffz_diffy = NULL;
@@ -732,92 +826,6 @@ void normalize(float * x, int total_elts){
   return;
 }
 
-int send_to_gpu(const float * data, const int batchsize, const int num_neurons, const int verbose){
-  //Send it and a layer of weights to the GPU
-  //Send first dimensions, then data (twice)
-  int out_dims[2] = {batchsize, num_neurons};
- 
-#ifdef NENCLAVE
-  int written = write_stream((void *) out_dims, sizeof(out_dims));
-  if(written){
-    print_out((char *) &("Failed writing matrix dimensions"[0]), true);
-    cout << written << " bytes sent" << endl;        
-    return 1;
-  }
-#else
-  sgx_status_t ocall_status;
-  int ocall_ret;
-
-  ocall_status = write_stream(&ocall_ret, (void *) out_dims, sizeof(out_dims));
-  if(ocall_ret){
-    print_out((char *) &("Failed writing matrix dimensions"[0]), true);
-    return 1;
-  }
-#endif      
-  if(verbose){
-    print_out((char *) &("Sent matrix dimensions"[0]), false);   
-  }    
- 
-#ifdef NENCLAVE  
-  if(write_stream((void *) data, sizeof(float)*batchsize*num_neurons)){
-    print_out((char *) &("Failed writing matrix"[0]), true);
-    return 1;
-  }
-#else
-  ocall_status = write_stream(&ocall_ret, (void *) data, sizeof(float)*batchsize*num_neurons);
-  if(ocall_ret){
-    print_out((char *) &("Failed writing matrix"[0]), true);
-    return 1;
-  }
-#endif
-  return 0;
-}
-
-int receive_from_gpu(float ** result, int * num_neurons, int * batchsize, const int verbose){
-  //Get back a result C ?= A*B
-  //Read in dimensions, then data
-  int in_dims[2] = {0, 0};
-#ifdef NENCLAVE      
-  if(read_stream((void *) in_dims, sizeof(in_dims))){
-    print_out((char *) &("Failed reading in result dimensions"[0]), true);
-    return 1;
-  }
-#else
-  sgx_status_t ocall_status;
-  int ocall_ret;
-
-  ocall_status = read_stream(&ocall_ret, (void *) in_dims, sizeof(in_dims));
-  if(ocall_ret){
-    print_out((char *) &("Failed reading in result dimensions"[0]), true);
-    return 1;
-  }
-#endif      
-  if(verbose){
-    print_out((char *) &("Read in result dimensions"[0]), false);
-  }
-
-  *batchsize = in_dims[0];
-  *num_neurons = in_dims[1];
-  
-
-  *result = (float *) malloc(sizeof(float)*(*num_neurons)*(*batchsize));
-#ifdef NENCLAVE
-  if(read_stream((void *) *result, sizeof(float)*(*num_neurons)*(*batchsize))){
-    print_out((char *) &("Failed reading result result"[0]), true);
-    return 1;
-  }
-#else
-  ocall_status = read_stream(&ocall_ret, (void *) *result, sizeof(float)*(*num_neurons)*(*batchsize));
-  if(ocall_ret){
-    print_out((char *) &("Failed reading in result"[0]), true);
-    return 1;
-  }
-#endif      
-  if(verbose){
-    print_out((char *) &("Read in result"[0]), false);
-  }
-  return 0;
-}
 
 //NB weights are a COLUMN vector
 
@@ -1021,7 +1029,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 #ifdef NENCLAVE          
           cout << "Frievalds' algorithm succeeded!" << endl;
 #else
-          print_out("Frievalds' algorithm succeeded!", false);          
+          print_out((char *) &("Frievalds' algorithm succeeded!"[0]), false);          
 #endif              
         }
     
@@ -1143,7 +1151,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           continue;
         }
 
-        int num_neurons = rev_layer_idx ? layer_files[rev_layer_idx-1] : num_pixels;
+        int num_neurons = rev_layer_idx ? (int) layer_files[rev_layer_idx-1].neurons : (int) num_pixels;
 
         float * d_ret = NULL;
         float * e_ret = NULL;
@@ -1155,13 +1163,19 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           derivative, layer_files[rev_layer_idx].neurons, num_images_this_batch,
           &d_ret, &e_ret, verbose);
 
+        if(demask_result){
+          std::string out_str = "Failed in demasking at layer " + std::to_string(rev_layer_idx);
+          print_out((char *) &(out_str[0]), true);
+          return 1;
+        }
+
         free(derivative);
         derivative = NULL;
         derivative = d_ret;
 
         //Update weights with e_ret
         update_weights(layer_data[rev_layer_idx], e_ret, 
-          neurons*layer_files[rev_layer_idx].neurons*num_neurons, LEARNING_RATE);
+          num_neurons*layer_files[rev_layer_idx].neurons*num_neurons, LEARNING_RATE);
 
         free(e_ret);
         e_ret = NULL;
