@@ -51,11 +51,8 @@ print("GPU starting backprop")
 for i in range(layers)[::-1]: 
 
   if spc.good():
-    spc.send_to_enclave(outputs[i])
-
-  if spc.good():
     grad_output = spc.read_matrix_from_enclave()
-    assert(grad_ouput.dtype == np.float32)
+    print(grad_output)
 
 
   d = grad_output @ weights[i].transpose()

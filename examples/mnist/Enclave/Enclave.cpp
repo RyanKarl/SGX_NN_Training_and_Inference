@@ -389,26 +389,28 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
     float ** d_ret, float ** e_ret
     //int * re_w, int * ret_w
     ){
+  assert(input_height == final_data_height);
   //final_data is softmax(a*b.t)
   //take the derivative of that term
   //TODO only need one small buffer for soft_der at a time
   float * grad_output_transposed = transpose(grad_output, grad_output_width, grad_output_height);
-  float * soft_der = (float *) malloc(sizeof(float) * input_height * input_width * input_width);
-  float * c_prod = (float *) malloc(sizeof(float) * input_width * input_height);
+  float * soft_der = (float *) malloc(sizeof(float) * final_data_width * final_data_width);
+  float * c_prod = (float *) malloc(sizeof(float) * final_data_width * final_data_height );
   float * c_prod_ptr = c_prod;
   int prod_w, prod_h;
   for(int i = 0; i < input_height; i++){
     //TODO softmax_derivative allocates memory
-    softmax_derivative(input + (i*input_width), input_width,
-     soft_der + (i*input_width*input_width)); 
+    softmax_derivative(input + (i*input_width), final_data_width,
+      soft_der); 
     //Get the right part of the buffer to write to
     c_prod_ptr = c_prod + (i*input_width);
     //Now multiply
-    matrix_multiply(grad_output_transposed + (i*grad_output_width), 1, grad_output_height,
-    soft_der, input_width, input_width, //Same args for w and h intentional
-    (float **) &c_prod_ptr, &prod_w, &prod_h, 0, 0);
-    assert(prod_w == input_width);
-    assert(prod_h == input_height);
+    //Argument order switched
+    matrix_multiply(grad_output_transposed + (i*grad_output_width), grad_output_width, 1,
+      soft_der, final_data_width, final_data_width, //Same args for w and h intentional
+      (float **) &c_prod_ptr, &prod_w, &prod_h, 0, 0);
+    assert(prod_w == final_data_width);
+    assert(prod_h == final_data_height);
   }
 
   free(grad_output_transposed);
@@ -423,7 +425,7 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
 
   int d_w, d_h;
   //Allocates new memory pointed to by *d_ret
-  matrix_multiply(c_prod, input_width, input_height,
+  matrix_multiply(c_prod, final_data_width, final_data_height,
     b_transpose, weights_height, weights_width,
     d_ret, &d_w, &d_h, 0);
 
@@ -469,64 +471,74 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
     weights_mask, weights_width, weights_height,
      &a_mul_wmask, &a_mul_wmask_width, &a_mul_wmask_height);
 
-  float * weight_mask_transpose_weights_transpose = (float *) malloc(sizeof(float) * weights_height * weights_width);
-  float * weight_mask_transpose_weights_transpose_a_prod = (float *) malloc(sizeof(float) * weights_height * weights_width);
+  float * weight_mask_weights = (float *) malloc(sizeof(float) * weights_height * weights_width);
+  //diff_term eventually
+  float * a_prod_weights_mask = (float *) malloc(sizeof(float) * weights_height * weights_width);
   
-  float * weight_rand_mask_transpose = transpose(weights_mask, weights_width, weights_height);
+
+  matrix_sub(weights_mask, weights, weights_height * weights_width, weight_mask_weights);
+
+  float * diff_term;
+  int diff_term_w, diff_term_h;
+  matrix_multiply(input_mask, input_width, input_height,
+    weight_mask_weights, weights_width, weights_height,
+    &diff_term, &diff_term_w, &diff_term_h);
+
+  matrix_sub(diff_term, a_mul_wmask, diff_term_w*diff_term_h, diff_term);
+
+  free(weight_mask_weights);
+  weight_mask_weights = NULL;
+  free(a_prod_weights_mask);
+  a_prod_weights_mask = NULL;
+
+
+  float * weight_mask_transpose = transpose(weights_mask, weights_width, weights_height);
   float * weights_transpose = transpose(weights, weights_width, weights_height); //might need later
 
-  matrix_sub(weight_rand_mask_transpose, weights_transpose, weights_height * weights_width, weight_mask_transpose_weights_transpose);
-
-  free(weight_rand_mask_transpose);
-  weight_rand_mask_transpose = NULL;
   free(weights_transpose);
   weights_transpose = NULL;   
-
-  free(weight_mask_transpose_weights_transpose);
-  weight_mask_transpose_weights_transpose = NULL;
-
-  matrix_sub(weight_rand_mask_transpose, a_mul_wmask, weights_height * weights_width, weight_mask_transpose_weights_transpose_a_prod);
 
   free(a_mul_wmask);
   a_mul_wmask = NULL;
 
-  float * diff_term;
-  int diff_term_w, diff_term_h;
-
-  matrix_multiply(weight_mask_transpose_weights_transpose_a_prod, weights_width, weights_height,
-   input_mask, input_width, input_height, 
-   &diff_term, &diff_term_w, &diff_term_h);
-
-  free(weight_mask_transpose_weights_transpose_a_prod);
-  weight_mask_transpose_weights_transpose_a_prod = NULL;
-
   float * c_transformed = (float *) malloc(sizeof(float) * grad_output_height * outputs_width);
   transform_and_mult(grad_output, outputs, diff_term, c_transformed, grad_output_height * outputs_width);
+
+  float * weightmask_b = (float *) malloc(sizeof(float) * weights_height * weights_width);
+  matrix_sub(weights_mask, weights, weights_height*weights_width, weightmask_b);
+
+  //Now transpose
+  float * wrm_b_t = transpose(weightmask_b, weights_width, weights_height);
+
+  free(weightmask_b);
+  weightmask_b = NULL;
+
+  float * diffc_diffa;
+  int diffc_diffa_w, diffc_diffa_h;
+
+  grad_rand_mask = (float *) malloc(sizeof(float) * grad_output_height * outputs_width);
+  rand_bytes((unsigned char *) grad_rand_mask, sizeof(float) * grad_output_height * outputs_width);
 
   float * grm_transformed = transform(grad_rand_mask, diff_term, grad_output_height * outputs_width);
 
   free(diff_term);
   diff_term = NULL;
 
-  float * weightmask_b = (float *) malloc(sizeof(float) * weights_height * weights_width);
-  matrix_sub(weights_mask, weights, weights_height*weights_width, weightmask_b);
-
-
-  float * diffc_diffa;
-  int diffc_diffa_w, diffc_diffa_h;
-
-  matrix_multiply(grm_transformed, grad_output_height, outputs_width,
-   weightmask_b, weights_width, weights_height,
+  matrix_multiply(grm_transformed, outputs_width, grad_output_height, 
+   wrm_b_t, weights_height, weights_width,
    &diffc_diffa, &diffc_diffa_w, &diffc_diffa_h);
+
+  free(wrm_b_t);
+  wrm_b_t = NULL;
     
   float * diffb;
   int diffb_w, diffb_h;
 
-  matrix_multiply(c_transformed, grad_output_height, grad_output_width,
-    weights_mask, weights_width, weights_height, 
+  matrix_multiply(c_transformed, grad_output_width, grad_output_height, 
+    weight_mask_transpose, weights_height, weights_width,
     &diffb, &diffb_w, &diffb_h, 0, 1);
     
-  //Send c_transformed to GPU  '
+  //Send c_transformed to GPU 
   if(send_to_gpu(c_transformed, grad_output_height, grad_output_width, verbose)){
     print_out((char *) &("Failed to send c_transformed"[0]), true);
     return 1;
@@ -539,9 +551,9 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
     return 1;
   }
   //Verify
-  if(verify_frievald(c_transformed, weights, d,
-      grad_output_height, grad_output_width,
-      weights_width, weights_height,
+  if(verify_frievald(c_transformed, weights_transpose, d,
+      grad_output_width, grad_output_height, 
+      weights_height, weights_width,
       d_w, d_h)){
     print_out((char *) &("Frievalds' algorithm failed on d"[0]), true);
     return 1;
@@ -605,7 +617,7 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   //First, get transposed of c_transformed
   float * c_t_t = transpose(c_transformed, grad_output_width, grad_output_height);
   if(verify_frievald(c_t_t, input, e,
-      grad_output_height, grad_output_width,
+      grad_output_width, grad_output_height, 
       input_width, input_height,
       e_w, e_h)){
     print_out((char *) &("Frievalds' algorithm failed on e"[0]), true);
@@ -1129,9 +1141,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         if(rev_layer_idx == (int)num_layers-1){
           float * d_ret = NULL;
           float * e_ret = NULL;
-          backwards_demask_lastlayer(input_data, num_images_this_batch, layer_files[rev_layer_idx-1].neurons,
-            final_data, num_images_this_batch, layer_files[rev_layer_idx].neurons,
-            layer_data[rev_layer_idx], layer_files[rev_layer_idx-1].neurons, layer_files[rev_layer_idx].neurons,
+          backwards_demask_lastlayer(input_data, layer_files[rev_layer_idx-1].neurons, num_images_this_batch,
+            final_data, layer_files[rev_layer_idx].neurons, num_images_this_batch,
+            layer_data[rev_layer_idx], layer_files[rev_layer_idx].neurons, layer_files[rev_layer_idx-1].neurons,
             derivative, num_possible_labels, num_images_this_batch,
             &d_ret, &e_ret);
 

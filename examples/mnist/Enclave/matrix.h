@@ -138,11 +138,9 @@ void softmax_derivative(const float * y, const int n, float * y_squared){
   //First, create the identity matrix
   //float * y_squared;
   int y_sq_h, y_sq_w;
-  matrix_multiply(y, 1, n, y, n, 1, (float **) &y_squared, &y_sq_w, &y_sq_h, 0, 0);
-#ifdef DEBUG  
+  matrix_multiply(y, 1, n, y, n, 1, (float **) &y_squared, &y_sq_w, &y_sq_h, 0, 0); 
   assert(y_sq_w == n);
-  assert(y_sq_h == n);
-#endif  
+  assert(y_sq_h == n); 
   for(int i = 0; i < n; i++){
     for(int j = 0; j < n; j++){
       INDEX_FLOATMAT(y_squared, i, j, n) = (i != j)?
