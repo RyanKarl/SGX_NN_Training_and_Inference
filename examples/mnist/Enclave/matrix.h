@@ -95,6 +95,7 @@ float * transpose(const float * x, const int width, const int height){
   return ret;
 }
 
+
 //https://stats.stackexchange.com/questions/338285/how-does-the-subtraction-of-the-logit-maximum-improve-learning
 #define FP_LARGE_T double
 void softmax(float * x, const int total_elts){
@@ -176,10 +177,10 @@ float * transform(const float * y, const float * term, const int total_elts){
   return ret;
 }
 
-void transform_and_mult(float * y, const float * g, const float * term, const int total_elts){
+void transform_and_mult(const float * y, const float * g, const float * term, float * ret, const int total_elts){
   for(int i = 0; i < total_elts; i++){
     float tmp = g[i] - term[i];
-    y *= 1.0f - tanh(tmp*tmp);
+    ret[i] = y[i] * (1.0f - tanh(tmp*tmp));
   }
   return;
 }
