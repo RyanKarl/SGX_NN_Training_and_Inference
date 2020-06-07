@@ -171,7 +171,7 @@ float * softmax_derivative(float * s,
 float * transform(const float * y, const float * term, const int total_elts){
   float * ret = (float *) malloc(sizeof(float)*total_elts);
   for(int i = 0; i < total_elts; i++){
-    float tmp = y[i] - term[i]
+    float tmp = y[i] - term[i];
     ret[i] = 1.0f - tanh(tmp*tmp);
   }
   return ret;
