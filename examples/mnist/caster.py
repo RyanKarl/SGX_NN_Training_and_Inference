@@ -48,21 +48,35 @@ for i in range(layers):
         
 print("GPU starting backprop")        
         
-for i in range(layers)[::-1]: 
+for i in range(layers-1)[::-1]: 
 
   if spc.good():
     grad_output = spc.read_matrix_from_enclave()
-    print(grad_output)
+    print("grad_output at layer " + str(i) + ": " + str(grad_output))
 
+  if grad_output is not None:
+    print("Received grad_output at layer " + str(i))
+  else:
+    print("ERROR receiving grad_output at layer " + str(i))  
 
-  d = grad_output @ weights[i].transpose()
-  e = grad_output.transpose() @ actvations[i]
+  try:
+    d = grad_output @ weights[i].transpose()
+  except:
+    print(type(weights[i]))  
+    print(weights[i].shape)
+    
+  try:  
+    e = grad_output.transpose() @ activations[i]
+  except:
+    print(type(activations[i].shape))  
 
   if spc.good():
     spc.send_to_enclave(d)
+    print("d from GPU: " + str(d))
     outdata = spc.validate_one_matrix(d)
     f.write(outdata[0])
     f.write(outdata[1])  
+    
 
   if spc.good():
     spc.send_to_enclave(e)
@@ -70,12 +84,17 @@ for i in range(layers)[::-1]:
     f.write(outdata[0])
     f.write(outdata[1])    
     
+  print("Sent e at layer " + str(i))   
+    
+  '''
   if spc.good():
     spc.send_to_enclave(activations[i])
+    print("Sent activations at layer " + str(i)) 
   if spc.good():
     spc.send_to_enclave(weights[i])
+  '''  
 
         
-        
+spc.close(force=False)        
     
 

@@ -409,12 +409,7 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
     //Argument order switched
     matrix_multiply(grad_output_transposed + (i*grad_output_width), grad_output_width, 1,
       soft_der, final_data_width, final_data_width, //Same args for w and h intentional
-      (float **) &c_prod_ptr, &prod_w, &prod_h, 0, 0);
-
-#ifdef NENCLAVE
-    cout << "c_prod: ";
-    print_floatarr(c_prod_ptr, prod_w*prod_h);
-#endif    
+      (float **) &c_prod_ptr, &prod_w, &prod_h, 0, 0); 
 
     assert(prod_w == final_data_width);
     assert(prod_h == final_data_height);
@@ -441,11 +436,11 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
   
   //Calculate e_ret as c.t() @ input
   //First transpose c
-  float * c_t = transpose(c_prod, input_width, input_height);
+  float * c_t = transpose(c_prod, final_data_width, final_data_height);
   free(c_prod);
   c_prod = NULL;
   int e_w, e_h;
-  matrix_multiply(c_t, input_height, input_width, //Swapped for transpose
+  matrix_multiply(c_t, final_data_height, final_data_width, //Swapped for transpose
     input, input_width, input_height,
     e_ret, &e_w, &e_h);
 
@@ -966,13 +961,16 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     float ** input_masks = (float **) malloc(sizeof(float *) * num_layers);
     float ** weights_mask = (float **) malloc(sizeof(float *) * num_layers);
     
+    for(unsigned int i = 0; i < num_layers; i++){
+      activated_input[i] = unactivated_outputs[i] = input_masks[i] = weights_mask[i] = NULL;
+    }
+    
     //Now we have the whole batch in a single array
     for(unsigned int layer_idx = 0; layer_idx < num_layers; layer_idx++){
       int num_neurons;
       num_neurons = layer_idx ? layer_files[layer_idx-1].neurons : num_pixels;
 
       activated_input[layer_idx] = input_data;
-      unactivated_outputs[layer_idx] = NULL;
 
       //Mask the current input
       //First, get the random mask
@@ -991,7 +989,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }    
 #ifdef NENCLAVE
       if(verbose >= 2){
-        int n_idx = nan_idx(input_data, num_images_this_batch*num_pixels);
+        int n_idx = nan_idx(input_data, num_neurons*num_images_this_batch);
         if(n_idx != -1){
           cout << "NaN found at " << n_idx << " of input_data, value is " << input_data[n_idx] << endl;
         }
@@ -1187,38 +1185,40 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           free(derivative);
           derivative = NULL;
           derivative = d_ret;
+        }
+        else{
+          int num_neurons = rev_layer_idx ? (int) layer_files[rev_layer_idx-1].neurons : (int) num_pixels;
 
-          continue;
+          float * d_ret = NULL;
+          float * e_ret = NULL;
+          int demask_result = backwards_demask_ordinary(activated_input[rev_layer_idx], num_neurons, num_images_this_batch,
+            input_masks[rev_layer_idx], 
+            unactivated_outputs[rev_layer_idx], layer_files[rev_layer_idx].neurons, num_images_this_batch,
+            layer_data[rev_layer_idx], layer_files[rev_layer_idx].neurons, num_neurons,
+            weights_mask[rev_layer_idx],
+            derivative, layer_files[rev_layer_idx].neurons, num_images_this_batch,
+            &d_ret, &e_ret, verbose);
+
+          if(demask_result){
+            std::string out_str = "Failed in demasking at layer " + std::to_string(rev_layer_idx);
+            print_out((char *) &(out_str[0]), true);
+            return 1;
+          }
+
+          free(derivative);
+          derivative = NULL;
+          derivative = d_ret;
+
+          //Update weights with e_ret
+          update_weights(layer_data[rev_layer_idx], e_ret, 
+            num_neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
+
+          free(e_ret);
+          e_ret = NULL;
         }
 
-        int num_neurons = rev_layer_idx ? (int) layer_files[rev_layer_idx-1].neurons : (int) num_pixels;
+        
 
-        float * d_ret = NULL;
-        float * e_ret = NULL;
-        int demask_result = backwards_demask_ordinary(activated_input[rev_layer_idx], num_neurons, num_images_this_batch,
-          input_masks[rev_layer_idx], 
-          unactivated_outputs[rev_layer_idx], layer_files[rev_layer_idx].neurons, num_images_this_batch,
-          layer_data[rev_layer_idx], layer_files[rev_layer_idx].neurons, num_neurons,
-          weights_mask[rev_layer_idx],
-          derivative, layer_files[rev_layer_idx].neurons, num_images_this_batch,
-          &d_ret, &e_ret, verbose);
-
-        if(demask_result){
-          std::string out_str = "Failed in demasking at layer " + std::to_string(rev_layer_idx);
-          print_out((char *) &(out_str[0]), true);
-          return 1;
-        }
-
-        free(derivative);
-        derivative = NULL;
-        derivative = d_ret;
-
-        //Update weights with e_ret
-        update_weights(layer_data[rev_layer_idx], e_ret, 
-          num_neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
-
-        free(e_ret);
-        e_ret = NULL;
         free(activated_input[rev_layer_idx]);
         activated_input[rev_layer_idx] = NULL;
         free(input_masks[rev_layer_idx]);
@@ -1230,26 +1230,40 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         
       } //rev_layer_idx
 
-      //Free up labels
-      free(data_labels);
-      data_labels = NULL;
+      
 
       free(derivative);
       derivative = NULL;
 
-      //Free saved data buffers
-      free(activated_input);
-      activated_input = NULL;
-      free(input_masks);
-      input_masks = NULL;
-      free(unactivated_outputs);
-      unactivated_outputs = NULL;
-      free(weights_mask);
-      weights_mask = NULL;
+      
 
     } //if(backprop)
+    else{
+      for(int rev_layer_idx = num_layers-1; rev_layer_idx >= 0; rev_layer_idx--){
+        free(activated_input[rev_layer_idx]);
+        activated_input[rev_layer_idx] = NULL;
+        free(input_masks[rev_layer_idx]);
+        input_masks[rev_layer_idx] = NULL;
+        free(unactivated_outputs[rev_layer_idx]);
+        unactivated_outputs[rev_layer_idx] = NULL;
+        free(weights_mask[rev_layer_idx]);
+        weights_mask[rev_layer_idx] = NULL;
+      }
+    }
 
+    //Free up labels
+    free(data_labels);
+    data_labels = NULL;
 
+    //Free saved data buffers
+    free(activated_input);
+    activated_input = NULL;
+    free(input_masks);
+    input_masks = NULL;
+    free(unactivated_outputs);
+    unactivated_outputs = NULL;
+    free(weights_mask);
+    weights_mask = NULL;
     
   } //batch_idx
 
