@@ -398,17 +398,24 @@ void backwards_demask_lastlayer(const float * input, const int input_width, cons
   float * c_prod = (float *) malloc(sizeof(float) * final_data_width * final_data_height );
   float * c_prod_ptr = c_prod;
   int prod_w, prod_h;
-  for(int i = 0; i < input_height; i++){
+
+  for(int i = 0; i < final_data_height; i++){
     //TODO softmax_derivative allocates memory
-    softmax_derivative(input + (i*input_width), final_data_width,
+    softmax_derivative(final_data + (i*final_data_width), final_data_width,
       soft_der); 
     //Get the right part of the buffer to write to
-    c_prod_ptr = c_prod + (i*input_width);
+    c_prod_ptr = c_prod + (i*final_data_width);
     //Now multiply
     //Argument order switched
     matrix_multiply(grad_output_transposed + (i*grad_output_width), grad_output_width, 1,
       soft_der, final_data_width, final_data_width, //Same args for w and h intentional
       (float **) &c_prod_ptr, &prod_w, &prod_h, 0, 0);
+
+#ifdef NENCLAVE
+    cout << "c_prod: ";
+    print_floatarr(c_prod_ptr, prod_w*prod_h);
+#endif    
+
     assert(prod_w == final_data_width);
     assert(prod_h == final_data_height);
   }
@@ -495,8 +502,7 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   float * weight_mask_transpose = transpose(weights_mask, weights_width, weights_height);
   float * weights_transpose = transpose(weights, weights_width, weights_height); //might need later
 
-  free(weights_transpose);
-  weights_transpose = NULL;   
+    
 
   free(a_mul_wmask);
   a_mul_wmask = NULL;
@@ -537,6 +543,14 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   matrix_multiply(c_transformed, grad_output_width, grad_output_height, 
     weight_mask_transpose, weights_height, weights_width,
     &diffb, &diffb_w, &diffb_h, 0, 1);
+
+  //DEBUG
+#ifdef NENCLAVE
+  if(verbose >= 3){
+    cout << "c_transformed: ";
+    print_floatarr(c_transformed, grad_output_width * grad_output_height);
+  }
+#endif  
     
   //Send c_transformed to GPU 
   if(send_to_gpu(c_transformed, grad_output_height, grad_output_width, verbose)){
@@ -550,6 +564,7 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
     print_out((char *) &("Failed to receive d from GPU"[0]), true);
     return 1;
   }
+  
   //Verify
   if(verify_frievald(c_transformed, weights_transpose, d,
       grad_output_width, grad_output_height, 
@@ -558,6 +573,9 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
     print_out((char *) &("Frievalds' algorithm failed on d"[0]), true);
     return 1;
   }
+
+  free(weights_transpose);
+  weights_transpose = NULL; 
   
   float * difftemp = (float *) malloc(sizeof(float) * grad_output_height*weights_width);
   
@@ -597,7 +615,7 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   float * diffz_diffy;
   int diffz_diffy_w, diffz_diffy_h;
   matrix_multiply(grm_transformed_transposed, grad_output_height, outputs_width, 
-    rand_mask_a, input_height, input_width, //Reversed due to transposition
+    rand_mask_a, input_width, input_height, //Reversed due to transposition
      &diffz_diffy, &diffz_diffy_w, &diffz_diffy_h);
 
   free(grm_transformed_transposed);
@@ -617,7 +635,7 @@ int backwards_demask_ordinary(const float * input, const int input_width, const 
   //First, get transposed of c_transformed
   float * c_t_t = transpose(c_transformed, grad_output_width, grad_output_height);
   if(verify_frievald(c_t_t, input, e,
-      grad_output_width, grad_output_height, 
+      grad_output_height, grad_output_width, 
       input_width, input_height,
       e_w, e_h)){
     print_out((char *) &("Frievalds' algorithm failed on e"[0]), true);
@@ -1151,6 +1169,16 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           update_weights(layer_data[rev_layer_idx], e_ret, 
             layer_files[rev_layer_idx-1].neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
 
+          //DEBUG
+#ifdef NENCLAVE
+          /*
+          if(verbose >= 3){
+            cout << "d_ret of last layer: ";
+            print_floatarr(d_ret, num_images_this_batch*layer_files[rev_layer_idx-1].neurons);
+          }
+          */
+#endif          
+
           free(e_ret);
           e_ret = NULL;
           free(input_data);
@@ -1187,7 +1215,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
         //Update weights with e_ret
         update_weights(layer_data[rev_layer_idx], e_ret, 
-          num_neurons*layer_files[rev_layer_idx].neurons*num_neurons, LEARNING_RATE);
+          num_neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
 
         free(e_ret);
         e_ret = NULL;
