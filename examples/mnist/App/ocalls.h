@@ -97,7 +97,7 @@ int close_streams(){
 }
 
 
-int csv_getline(char * csv_filename, float * vals, unsigned int * label, size_t num_vals){
+int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_t num_vals){
   static std::ifstream ifs(csv_filename);
   if(!ifs.good()){
     return 1;
@@ -106,7 +106,7 @@ int csv_getline(char * csv_filename, float * vals, unsigned int * label, size_t 
   char comma_holder;
   for(unsigned int i = 0; i < num_vals; i++){
     ifs >> vals[i] >> comma_holder;
-    //Normalize float value
+    //Normalize FP_TYPE value
     vals[i] /= (1 << CHAR_BIT);
   }
   int label_i;
@@ -124,7 +124,7 @@ void print_out(char * msg, int error){
   }
 }
 
-int floats_to_csv(char * fname, size_t num_elts, float * data){
+int FP_TYPEs_to_csv(char * fname, size_t num_elts, FP_TYPE * data){
   ofstream ofs(fname);
   for(size_t i = 0; i < num_elts; i++){
     ofs << data[i];
@@ -164,7 +164,7 @@ int file_to_string(char * fname, char * out, size_t str_buf_len){
 }
 
 //Assumes a buffer is allocated
-int read_weight_file(char * filename, size_t num_elements, float * buf){
+int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf){
   if(!num_elements){
     return 1;
   }
@@ -172,8 +172,8 @@ int read_weight_file(char * filename, size_t num_elements, float * buf){
   if(!f){
     return 1;
   }
-  long bytes_read = fread(buf, sizeof(float), num_elements, f);
-  if(bytes_read*sizeof(float) != (unsigned long) num_elements){
+  long bytes_read = fread(buf, sizeof(FP_TYPE), num_elements, f);
+  if(bytes_read*sizeof(FP_TYPE) != (unsigned long) num_elements){
     fclose(f);
     return 1;
   }
@@ -184,10 +184,10 @@ int read_weight_file(char * filename, size_t num_elements, float * buf){
 }
 
 //Assumes comma-delimited
-int read_weight_file_plain(char * filename, size_t bufsize, float * buf){
+int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
   ifstream fs(filename);
   char comma_holder;
-  for(size_t i = 0; i < bufsize/sizeof(float); i++){
+  for(size_t i = 0; i < bufsize/sizeof(FP_TYPE); i++){
     if(!fs.good()){
       return 1;
     }

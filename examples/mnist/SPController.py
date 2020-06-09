@@ -15,14 +15,14 @@ TMPDIR = "/tmp/"
 FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
 INT_BYTES = 4
 
-NP_FLOATYPE = np.float32
-FLOAT_BYTES = 4
+NP_FLOATYPE = np.float64
+FLOAT_BYTES = 8
 
 # endianess
 BYTEORDER = sys.byteorder
 DATA_DIMENSIONS = 3
-# f for float
-STRUCT_PACK_FMT = 'f'
+# f for float, d for double
+STRUCT_PACK_FMT = 'd'
 NUM_MATRICES = 3
 MAT_DIM = 2
 BUFFERING=-1

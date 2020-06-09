@@ -6,11 +6,13 @@
 # define CHAR_BIT 8
 # endif
 
+#define FP_TYPE double
+
 # define NUM_MATRICES 3
 # define MAT_DIM 2
 # define K_PROBABILITY 2
 
-# define FLOAT_TOLERANCE 2
+# define FLOAT_TOLERANCE 4
 
 //Index in row-major order
 //i indexes width, j indexes height
