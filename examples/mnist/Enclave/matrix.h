@@ -169,7 +169,7 @@ float * softmax_derivative(float * s,
 float * transform(const float * y, const float * term, const int total_elts){
   float * ret = (float *) malloc(sizeof(float)*total_elts);
   for(int i = 0; i < total_elts; i++){
-    float tmp = tanh(y[i] - term[i]);
+    float tmp = tanh(y[i] + term[i]);
     ret[i] = 1.0f - (tmp*tmp);
   }
   return ret;
@@ -177,7 +177,7 @@ float * transform(const float * y, const float * term, const int total_elts){
 
 void transform_and_mult(const float * y, const float * g, const float * term, float * ret, const int total_elts){
   for(int i = 0; i < total_elts; i++){
-    float tmp = tanh(g[i] - term[i]);
+    float tmp = tanh(g[i] + term[i]);
     ret[i] = y[i] * (1.0f - (tmp*tmp));
   }
   return;

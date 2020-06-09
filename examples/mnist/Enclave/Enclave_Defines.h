@@ -10,7 +10,7 @@
 # define MAT_DIM 2
 # define K_PROBABILITY 2
 
-# define FLOAT_TOLERANCE 1e-1
+# define FLOAT_TOLERANCE 2
 
 //Index in row-major order
 //i indexes width, j indexes height

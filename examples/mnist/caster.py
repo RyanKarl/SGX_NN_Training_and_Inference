@@ -20,22 +20,25 @@ for i in range(layers):
     print("GPU on layer " + str(i+1))
     if spc.good():
         a = spc.read_matrix_from_enclave()
-        a = a.astype(np.float32)
+        a = a.astype(np.float64)
         activations[i] = a
-        print(a.shape)
+        print("a received by GPU: " + str(a))
+        #print(a.shape)
     else:
         sys.exit(1)
 
     if spc.good():
         b = spc.read_matrix_from_enclave()
-        b = b.astype(np.float32)
+        b = b.astype(np.float64)
         weights[i] = b
-        print(b.shape)
+        print("b received by GPU: " + str(b))
+        #print(b.shape)
     else:
         sys.exit(1)
 
     if spc.good():
         c = (a @ b)
+        print("c calculated by GPU: " + str(c))
         spc.send_to_enclave(c)
         outputs[i] = c
         outdata = spc.validate_one_matrix(c)
@@ -72,7 +75,7 @@ for i in range(layers-1)[::-1]:
 
   if spc.good():
     spc.send_to_enclave(d)
-    print("d from GPU: " + str(d))
+    #print("d from GPU: " + str(d))
     outdata = spc.validate_one_matrix(d)
     f.write(outdata[0])
     f.write(outdata[1])  
@@ -84,7 +87,7 @@ for i in range(layers-1)[::-1]:
     f.write(outdata[0])
     f.write(outdata[1])    
     
-  print("Sent e at layer " + str(i))   
+  print("Sent d, e at layer " + str(i))   
     
   '''
   if spc.good():
