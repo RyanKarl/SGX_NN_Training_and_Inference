@@ -124,7 +124,7 @@ void print_out(char * msg, int error){
   }
 }
 
-int FP_TYPEs_to_csv(char * fname, size_t num_elts, FP_TYPE * data){
+int floats_to_csv(char * fname, size_t num_elts, FP_TYPE * data){
   ofstream ofs(fname);
   for(size_t i = 0; i < num_elts; i++){
     ofs << data[i];
