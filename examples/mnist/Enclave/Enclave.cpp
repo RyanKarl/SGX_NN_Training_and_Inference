@@ -43,7 +43,7 @@ inline void rand_bytes(unsigned char * r, const size_t n_bytes){
 #endif
 
 //TODO rewrite this to use less space if needed
-void rand_buf_to_FP_TYPEs(FP_TYPE * buf, size_t num_FP_TYPEs){
+void rand_buf_to_floats(FP_TYPE * buf, size_t num_FP_TYPEs){
   for(size_t i = 0; i < num_FP_TYPEs; i++){
     unsigned char * char_addr = (unsigned char *) &buf[i];
     buf[i] = ((FP_TYPE) (*char_addr) / (1 << CHAR_BIT));
@@ -55,7 +55,7 @@ void rand_buf_to_FP_TYPEs(FP_TYPE * buf, size_t num_FP_TYPEs){
 }
 
 #ifdef NENCLAVE
-void print_FP_TYPEarr(const FP_TYPE * data, int size){
+void print_floatarr(const FP_TYPE * data, int size){
   for(int i = 0; i < size; i++){
     cout << data[i] << ' ';
   }
@@ -241,21 +241,21 @@ int mask(const FP_TYPE * input, const FP_TYPE * masks, int input_size, FP_TYPE *
 //Assumes a buffer is allocated
 int read_all_weights(const vector<layer_file_t> & layers, FP_TYPE ** bufs, unsigned int num_pixels){
   for(size_t i = 0; i < layers.size(); i++){
-    int num_FP_TYPEs = layers[i].neurons * (i? layers[i-1].neurons : num_pixels);
+    int num_floats = layers[i].neurons * (i? layers[i-1].neurons : num_pixels);
 
-    bufs[i] = (FP_TYPE *) malloc(num_FP_TYPEs * sizeof(FP_TYPE));
+    bufs[i] = (FP_TYPE *) malloc(num_floats * sizeof(FP_TYPE));
     //Should check return val
     size_t len = layers[i].filename.size();
     char * fname_buf = (char *) calloc(len+1, sizeof(char));
     strncat(fname_buf, layers[i].filename.c_str(), len);
 #ifdef NENCLAVE
-    if(read_weight_file_plain(fname_buf, num_FP_TYPEs * sizeof(FP_TYPE), bufs[i])){
+    if(read_weight_file_plain(fname_buf, num_floats * sizeof(FP_TYPE), bufs[i])){
       return 1;
     }
 #else
     int ocall_ret;
     sgx_status_t ocall_status;
-    ocall_status = read_weight_file_plain(&ocall_ret, fname_buf, num_FP_TYPEs * sizeof(FP_TYPE), bufs[i]);
+    ocall_status = read_weight_file_plain(&ocall_ret, fname_buf, num_floats * sizeof(FP_TYPE), bufs[i]);
     if(ocall_status || ocall_ret){
       return 1;
     }
@@ -440,10 +440,12 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
     b_transpose, weights_height, weights_width,
     d_ret, &d_w, &d_h, 0);
 
+/*
 #ifdef NENCLAVE
     cout << "d_ret last layer result: ";
-    print_FP_TYPEarr(*d_ret, d_w * d_h);
+    print_floatarr(*d_ret, d_w * d_h);
 #endif  
+*/
 
   free(b_transpose);
   b_transpose = NULL;
@@ -534,7 +536,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   //Mask the grad. output being sent to the GPU
   FP_TYPE * grad_rand_mask = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height * outputs_width);
   rand_bytes((unsigned char *) grad_rand_mask, sizeof(FP_TYPE) * grad_output_height * outputs_width);
-  rand_buf_to_FP_TYPEs(grad_rand_mask, grad_output_width * grad_output_height);
+  rand_buf_to_floats(grad_rand_mask, grad_output_width * grad_output_height);
   mask(c_transformed, grad_rand_mask, grad_output_width * grad_output_height, grad_output, false);
 
   free(diff_term);
@@ -837,15 +839,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     }
 
     FP_TYPE ** gpu_inputs = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * num_layers); //Slight misnomer - activated only by the prev. layer
-    FP_TYPE ** gpu_outputs = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * (num_layers-1)); 
+    FP_TYPE ** gpu_outputs = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * (num_layers)); 
     FP_TYPE ** input_masks = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * num_layers);
     FP_TYPE ** weights_mask = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * num_layers);
 
     for(unsigned int i = 0; i < num_layers; i++){
-      gpu_inputs[i] = input_masks[i] = weights_mask[i] = NULL;
+      gpu_inputs[i] = input_masks[i] = weights_mask[i] = gpu_outputs[i] = NULL;
+      /*
       if(i != num_layers-1){
         gpu_outputs[i] = NULL;
       }
+      */
     }
     
     //Now we have the whole batch in a single array
@@ -872,7 +876,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       rand_bytes((unsigned char *) input_masks[layer_idx], sizeof(FP_TYPE)*num_neurons*num_images_this_batch);
       //Normalize mask
       //normalize(mask_data, num_neurons*num_images_this_batch);
-      rand_buf_to_FP_TYPEs(input_masks[layer_idx], num_neurons*num_images_this_batch);
+      rand_buf_to_floats(input_masks[layer_idx], num_neurons*num_images_this_batch);
       //Next, mask the data
       /*
 #ifdef NENCLAVE
@@ -907,7 +911,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       weights_mask[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_weights);
       //Cast should be explicit, for the non-SGX version
       rand_bytes((unsigned char *) weights_mask[layer_idx], sizeof(FP_TYPE) * num_weights);
-      rand_buf_to_FP_TYPEs(weights_mask[layer_idx], num_weights);
+      rand_buf_to_floats(weights_mask[layer_idx], num_weights);
       //normalize(mask_weights, num_neurons);
       if(!skip_masking){
         mask(layer_data[layer_idx], weights_mask[layer_idx], num_weights, layer_data[layer_idx], false);
@@ -1093,8 +1097,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           update_weights(layer_data[rev_layer_idx], e_ret, 
             num_neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
 
-          free(gpu_outputs[rev_layer_idx]);
-          gpu_outputs[rev_layer_idx] = NULL;
 
           free(e_ret);
           e_ret = NULL;
@@ -1106,6 +1108,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         input_masks[rev_layer_idx] = NULL;
         free(weights_mask[rev_layer_idx]);
         weights_mask[rev_layer_idx] = NULL;
+        //TODO review - do we actually need num_layers gpu_outputs?
+        free(gpu_outputs[rev_layer_idx]);
+        gpu_outputs[rev_layer_idx] = NULL;
         
       } //rev_layer_idx
 
