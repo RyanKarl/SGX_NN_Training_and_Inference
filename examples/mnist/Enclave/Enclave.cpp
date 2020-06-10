@@ -130,8 +130,10 @@ int frievald(const FP_TYPE * a, const FP_TYPE * b, const FP_TYPE * c,
   */
   for (int i = 0; i < cr_h; i++){
     //cout << "axbr[" << i << "] " << axbr[i] << " cr[" << i << "] " << cr[i] << endl;
-    if (FLOAT_CMP(axbr[i], cr[i])){    
+    if (FLOAT_CMP(axbr[i], cr[i])){
+#ifdef NENCLAVE    
         cout << "axbr " << axbr[i] << " cr " << cr[i] << " i " << i << endl;
+#endif
         free(axbr);
         free(cr);
         axbr = cr = NULL;
@@ -156,7 +158,9 @@ int verify_frievald(const FP_TYPE * a, const FP_TYPE * b, const FP_TYPE * c,
         a_width, a_height, 
         b_width, b_height,
         c_width, c_height)){
+#ifdef NENCLAVE
       cout << "Frievalds' failed on pass " << j << endl;
+#endif
   		return 1;
   	}
   }
@@ -1230,10 +1234,16 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   free(layer_data);
 
   //Close streams
+#ifdef NENCLAVE
   if(close_streams()){
     return 1;
   }
-
+#else
+  ocall_status = close_streams(&ocall_ret);
+  if(ocall_ret){
+    return 1;
+  }
+#endif
   return 0;
 
 }
