@@ -49,7 +49,7 @@ int csv_getline(char * input_csv_name, FP_TYPE * vals, unsigned int * label, siz
 void print_out(char * msg, int error);
 int file_to_string(char * fname, char * out, size_t str_buf_len);
 int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf);
-int FP_TYPEs_to_csv(char * fname, size_t num_elts, FP_TYPE * data);
+int floats_to_csv(char * fname, size_t num_elts, FP_TYPE * data);
 size_t file_size(char * fname);
 
 #if defined(__cplusplus)

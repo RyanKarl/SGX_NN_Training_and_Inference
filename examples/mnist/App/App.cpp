@@ -283,7 +283,7 @@ int main(int argc, char ** argv){
     }
   }
   
-  if(verbose){
+  if(verbose >= 2){
     cout << "Args parsed" << endl;
   }
   
@@ -294,7 +294,7 @@ int main(int argc, char ** argv){
       fprintf(stderr, "Enclave initialization FAILED, exiting\n");
       return -1; 
   }
-  else if (verbose){
+  else if (verbose >= 2){
     cout << "Successfully initialized enclave" << endl;
   }
   
@@ -310,7 +310,7 @@ int main(int argc, char ** argv){
     network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, weights_outfile, backprop, verbose); 
 #endif  
 
-  if(verbose){
+  if(verbose >= 2){
     cout << "Enclave returned " << enclave_result << endl;
   }
   

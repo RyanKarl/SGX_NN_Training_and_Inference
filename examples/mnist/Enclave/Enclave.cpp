@@ -320,7 +320,7 @@ int send_to_gpu(const FP_TYPE * data, const int batchsize, const int num_neurons
     return 1;
   }
 #endif      
-  if(verbose){
+  if(verbose >= 2){
     print_out((char *) &("Sent matrix dimensions"[0]), false);   
   }    
  
@@ -358,7 +358,7 @@ int receive_from_gpu(FP_TYPE ** result, int * num_neurons, int * batchsize, cons
     return 1;
   }
 #endif      
-  if(verbose){
+  if(verbose >= 2){
     print_out((char *) &("Read in result dimensions"[0]), false);
   }
 
@@ -379,7 +379,7 @@ int receive_from_gpu(FP_TYPE ** result, int * num_neurons, int * batchsize, cons
     return 1;
   }
 #endif      
-  if(verbose){
+  if(verbose >= 2){
     print_out((char *) &("Read in result"[0]), false);
   }
   return 0;
@@ -556,6 +556,8 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
     weight_mask_transpose, weights_height, weights_width,
     &diffb, &diffb_w, &diffb_h, 0, 1);
 
+  free(weight_mask_transpose);
+  weight_mask_transpose = NULL;
 
   //Send c_transformed to GPU 
   if(send_to_gpu(c_transformed, grad_output_height, grad_output_width, verbose)){
@@ -658,6 +660,9 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
 
   free(diffz_diffy);
   diffz_diffy = NULL;
+
+  free(diffx);
+  diffx = NULL;
 
   *e_ret = e;
   *d_ret = d;
@@ -768,7 +773,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     print_out((char *) &("ERROR: could not initialize I/O streams"[0]), true);
     return -1;
   }
-  if(verbose){
+  if(verbose >= 2){
     print_out((char *) &("Initialized I/O streams"[0]), false);
   }
   
@@ -778,7 +783,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     print_out((char *) &("Network parsing failed!"[0]), true);
     return 1;
   }
-  if(verbose){
+  if(verbose >= 2){
     print_out((char *) &("Finished parsing network"[0]), false);
   }  
 #ifdef NENCLAVE
@@ -799,7 +804,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     print_out((char *) &("Failed to read weights"[0]), true);
     return 1;
   }
-  if(verbose){
+  if(verbose >= 2){
     print_out((char *) &("Read in weights"[0]), false);
   }
 
@@ -831,7 +836,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         return 1;
       }
 #endif        
-      if(verbose){
+      if(verbose >= 2){
         print_out((char *) &("Read input from file"[0]), false);
       }
       image_data_csv_ptr += num_pixels; //Increment pointer
@@ -862,11 +867,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         input_data = NULL;
       }
       else{
-        input_masking_target = gpu_unmasked_result;
-        //Unneccesary - initialized at the end of the loop
-        //gpu_inputs[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE)*num_images_this_batch*num_neurons);
-        //GPU's input at this layer will be the GPU's output from the last layer
-        //memcpy(gpu_inputs[layer_idx], gpu_outputs[layer_idx-1], sizeof(FP_TYPE)*num_images_this_batch*num_neurons);
+        input_masking_target = gpu_inputs[layer_idx] = gpu_unmasked_result;
+        gpu_unmasked_result = NULL;
       }
 
       //Mask the current input
@@ -878,25 +880,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //normalize(mask_data, num_neurons*num_images_this_batch);
       rand_buf_to_floats(input_masks[layer_idx], num_neurons*num_images_this_batch);
       //Next, mask the data
-      /*
-#ifdef NENCLAVE
-      if(verbose >= 2){
-        int n_idx = nan_idx(gpu_inputs[layer_idx], num_neurons*num_images_this_batch);
-        if(n_idx != -1){
-          cout << "NaN found at " << n_idx << " of input_data, value is " << activated_input[layer_idx] << endl;
-        }
-      }
-#endif 
-*/
 
-
-      gpu_inputs[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE)*num_neurons*num_images_this_batch);
       if(!skip_masking){
         mask(input_masking_target, input_masks[layer_idx], num_neurons*num_images_this_batch, gpu_inputs[layer_idx], false);
       }
       input_masking_target = NULL;
 
-      if(verbose){
+      if(verbose >= 2){
         print_out((char *) &("Finished masking input"[0]), false);
       }    
      
@@ -917,7 +907,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         mask(layer_data[layer_idx], weights_mask[layer_idx], num_weights, layer_data[layer_idx], false);
         
       }
-      if(verbose){
+      if(verbose >= 2){
         print_out((char *) &("Finished masking weights"[0]), false);
       }
 
@@ -929,7 +919,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
 
       //Receive result back
-      //FP_TYPE * gpu_result;
       int num_result_neurons;
       int result_batchsize;
       if(receive_from_gpu(&gpu_outputs[layer_idx], &num_result_neurons, &result_batchsize, verbose)){
@@ -1029,12 +1018,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 #endif        
       }
 
-      //Loss for the whole batch
-      FP_TYPE batch_loss = crossentropy_loss(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
       FP_TYPE * derivative = crossentropy_derivative(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
 
       //Print output
-      if(verbose >= 1){
+      if(verbose >= 2){
+        //Loss for the whole batch
+        FP_TYPE batch_loss = crossentropy_loss(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
         std::string loss_str = "Loss this batch: " + std::to_string(batch_loss);
         print_out((char *) &(loss_str.c_str()[0]), false);
       }
@@ -1154,12 +1143,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       string idx_str = std::to_string(i);
       string full_name = weights_out_str + idx_str;
 #ifdef NENCLAVE    
-      if(FP_TYPEs_to_csv((char *) &(full_name[0]), layer_files[i].neurons, layer_data[i])){
+      if(floats_to_csv((char *) &(full_name[0]), layer_files[i].neurons, layer_data[i])){
         cerr << "ERROR: could not write to " << full_name << endl;
         return 1;
       }
 #else
-      ocall_status = FP_TYPEs_to_csv(&ocall_ret, (char *) &(full_name.c_str()[0]), layer_files[i].neurons, layer_data[i]);
+      ocall_status = floats_to_csv(&ocall_ret, (char *) &(full_name.c_str()[0]), layer_files[i].neurons, layer_data[i]);
       if(ocall_ret){
         print_out((char *) &("Failed writing .csv out"[0]), true);
         return 1;
@@ -1175,12 +1164,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   }
   free(layer_data);
 
+  //Close streams
+  if(close_streams()){
+    return 1;
+  }
+
   return 0;
 
 }
 
 //TODO consistent verbosity levels
-//0 no output
+//0 no output (except in case of error)
 //1 timing data
 //2 logging
 //3 data
