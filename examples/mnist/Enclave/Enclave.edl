@@ -64,6 +64,8 @@ num_elements, [out, size=num_elements] double * buf);
 bufsize, [out, size=bufsize] double * buf);
         int floats_to_csv([in, string] char * fname, size_t num_elts, [in, size=num_elts] double * data);
         size_t file_size([in, string] char * fname);
+        int start_timing(int task);
+        int finish_timing(int task);
     };
     
 

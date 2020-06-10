@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <chrono>
 //#include <libexplain/libexplain.h>
 
 #include "../Enclave/Enclave_Defines.h"
@@ -26,6 +27,7 @@ using std::ofstream;
 using std::cout;
 using std::cerr;
 using std::endl;
+using namespace std::chrono;
 
 
 static FILE * instream;
@@ -196,6 +198,69 @@ int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
   return 0;
 }
 
+
+static high_resolution_clock::time_point overall_start;
+static high_resolution_clock::time_point forward_start;
+static high_resolution_clock::time_point backprop_start;
+
+static double overall_duration;
+static std::vector<double> forward_times;
+static std::vector<double> backprop_times;
+
+//Bad programming, but more efficient
+int start_timing(int task){
+  switch(task){
+    case TASK_ALL:{
+      overall_start = high_resolution_clock::now();
+      break;
+    }
+    case TASK_FORWARD:{
+      forward_start = high_resolution_clock::now();
+      break;
+    }
+    case TASK_BACKPROP:{
+      backprop_start = high_resolution_clock::now();
+      break;
+    }
+    default:{
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int finish_timing(int task){
+  high_resolution_clock::time_point end = high_resolution_clock::now();
+  switch(task){
+    case TASK_ALL:{
+      overall_duration = duration_cast<std::chrono::nanoseconds>(end - overall_start).count();
+      break;
+    }
+    case TASK_FORWARD:{
+      forward_times.push_back(duration_cast<std::chrono::nanoseconds>(end - forward_start).count());
+      break;
+    }
+    case TASK_BACKPROP:{
+      backprop_times.push_back(duration_cast<std::chrono::nanoseconds>(end - backprop_start).count());
+      break;
+    }
+    default:{
+      return 1;
+    }
+  }
+  return 0;
+}
+
+void print_timings(std::ostream & os){
+  os << "Total_duration: " << overall_duration << endl;
+  for(size_t i = 0; i < forward_times.size(); i++){
+    os << "Forward_pass: " << forward_times[i] << endl;
+  }
+  for(size_t j = 0; j < backprop_times.size(); j++){
+    os << "Backprop: " << backprop_times[j] << endl;
+  }
+  
+}
 
 
 #endif

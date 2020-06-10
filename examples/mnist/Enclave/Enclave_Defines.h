@@ -48,4 +48,9 @@ typedef struct {
 
 #define LEARNING_RATE 0.01
 
+#define TASK_ALL 0
+#define TASK_FORWARD 1
+#define TASK_BACKPROP 2
+
+
 #endif

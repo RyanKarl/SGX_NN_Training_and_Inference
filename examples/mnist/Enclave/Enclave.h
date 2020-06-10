@@ -52,6 +52,11 @@ int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf);
 int floats_to_csv(char * fname, size_t num_elts, FP_TYPE * data);
 size_t file_size(char * fname);
 
+int start_timing(int task);
+int finish_timing(int task);
+
+void print_timings(std::ostream & os);
+
 #if defined(__cplusplus)
 }
 #endif

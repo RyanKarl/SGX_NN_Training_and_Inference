@@ -314,7 +314,9 @@ int main(int argc, char ** argv){
     cout << "Enclave returned " << enclave_result << endl;
   }
   
-    
+  if(verbose >= 1){
+    print_timings(std::cout);
+  }  
   
   /* Destroy the enclave */
 #ifndef NENCLAVE  

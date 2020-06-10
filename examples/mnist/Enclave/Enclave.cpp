@@ -812,6 +812,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
   FP_TYPE * input_data;
 
+#ifdef NENCLAVE
+  if(start_timing(TASK_ALL)){
+    return 1;
+  }
+#else
+  ocall_status = start_timing(&ocall_ret, TASK_ALL);
+  if(ocall_ret){
+    return 1;
+  }
+#endif  
+
   for(unsigned int batch_idx = 0; batch_idx < num_batches; batch_idx++){
     //Get images into a matrix
     unsigned num_images_this_batch = (batch_idx == num_batches-1) ? (num_inputs / num_batches) : (num_inputs % num_batches);
@@ -847,6 +858,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     FP_TYPE ** gpu_outputs = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * (num_layers)); 
     FP_TYPE ** input_masks = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * num_layers);
     FP_TYPE ** weights_mask = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * num_layers);
+
+#ifdef NENCLAVE
+  if(start_timing(TASK_FORWARD)){
+    return 1;
+  }
+#else
+  ocall_status = start_timing(&ocall_ret, TASK_FORWARD);
+  if(ocall_ret){
+    return 1;
+  }
+#endif  
 
     for(unsigned int i = 0; i < num_layers; i++){
       gpu_inputs[i] = input_masks[i] = weights_mask[i] = gpu_outputs[i] = NULL;
@@ -1009,6 +1031,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     } //layer_idx (forward pass)
 
+#ifdef NENCLAVE
+  if(finish_timing(TASK_FORWARD)){
+    return 1;
+  }
+#else
+  ocall_status = finish_timing(&ocall_ret, TASK_FORWARD);
+  if(ocall_ret){
+    return 1;
+  }
+#endif 
+
 
     if(backprop){
 
@@ -1017,6 +1050,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         cout << "Starting backpropagation...\n";
 #endif        
       }
+
+#ifdef NENCLAVE
+  if(start_timing(TASK_BACKPROP)){
+    return 1;
+  }
+#else
+  ocall_status = start_timing(&ocall_ret, TASK_BACKPROP);
+  if(ocall_ret){
+    return 1;
+  }
+#endif 
 
       FP_TYPE * derivative = crossentropy_derivative(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
 
@@ -1103,6 +1147,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         
       } //rev_layer_idx
 
+#ifdef NENCLAVE
+  if(finish_timing(TASK_BACKPROP)){
+    return 1;
+  }
+#else
+  ocall_status = finish_timing(&ocall_ret, TASK_BACKPROP);
+  if(ocall_ret){
+    return 1;
+  }
+#endif 
+
       free(derivative);
       derivative = NULL;
 
@@ -1136,6 +1191,16 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     
   } //batch_idx
 
+#ifdef NENCLAVE
+  if(finish_timing(TASK_ALL)){
+    return 1;
+  }
+#else
+  ocall_status = finish_timing(&ocall_ret, TASK_ALL);
+  if(ocall_ret){
+    return 1;
+  }
+#endif  
 
   //Write weights back to file
   if((weights_out_str != "") && backprop){
