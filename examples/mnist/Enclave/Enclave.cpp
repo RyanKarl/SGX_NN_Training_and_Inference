@@ -187,7 +187,7 @@ int verify_frievald(const FP_TYPE * a, const FP_TYPE * b, const FP_TYPE * c,
 
 
 int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer_files, unsigned int & num_inputs, 
-  unsigned int & num_pixels, unsigned int & batchsize, unsigned int & num_labels){
+  unsigned int & num_pixels, unsigned int & batchsize, unsigned int & num_labels, unsigned int & epochs){
   
   size_t file_len;
 
@@ -222,6 +222,7 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
   num_pixels = atoi(strtok(NULL, " \n"));
   unsigned int num_layers = atoi(strtok(NULL, " \n"));
   num_labels = atoi(strtok(NULL, " \n"));
+  epochs = atoi(strtok(NULL, " \n"));
   
   layer_files.reserve(num_layers);
 
@@ -776,6 +777,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int batchsize = 0; 
   unsigned int num_pixels = 0;
   unsigned int num_possible_labels = 0;
+  unsigned int num_epochs = 1;
   bool skip_masking = false;
   string weights_out_str = "";
   if(weights_outfile != NULL){
@@ -803,7 +805,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   
 
   if(parse_structure(network_structure_fname, layer_files, 
-    num_inputs, num_pixels, batchsize, num_possible_labels)){
+    num_inputs, num_pixels, batchsize, num_possible_labels, num_epochs)){
     print_out((char *) &("Network parsing failed!"[0]), true);
     return 1;
   }
@@ -847,7 +849,11 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   }
 #endif  
 
-  for(unsigned int batch_idx = 0; batch_idx < num_batches; batch_idx++){
+  for(unsigned int epoch_idx = 0; epoch_idx < num_epochs; num_epochs++){
+
+    bool epoch_reset = true;
+
+    for(unsigned int batch_idx = 0; batch_idx < num_batches; batch_idx++){
     //Get images into a matrix
     unsigned num_images_this_batch = (batch_idx != num_batches-1) ? (batchsize) : (num_inputs % num_batches);
     input_data = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_images_this_batch * num_pixels);
@@ -860,17 +866,18 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     for(unsigned int image_idx = 0; image_idx < num_images_this_batch; image_idx++){
 #ifdef NENCLAVE        
-      if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels)){
+      if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels, epoch_reset)){
         print_out((char *) &("Failed to read input .csv"[0]), true);
         return 1;
       }
 #else
-      ocall_status = csv_getline(&ocall_ret, input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels);
+      ocall_status = csv_getline(&ocall_ret, input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels, epoch_reset);
       if(ocall_ret){
         print_out((char *) &("Failed to read input .csv"[0]), true);
         return 1;
       }
-#endif        
+#endif      
+      epoch_reset = false; //Only reset stream on first go of an epoch  
       
       image_data_csv_ptr += num_pixels; //Increment pointer
       data_labels_ptr++;
@@ -1225,6 +1232,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     weights_mask = NULL;
     
   } //batch_idx
+  }
+
+  
 
 #ifdef NENCLAVE
   if(finish_timing(TASK_ALL)){
