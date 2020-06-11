@@ -848,7 +848,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
   for(unsigned int batch_idx = 0; batch_idx < num_batches; batch_idx++){
     //Get images into a matrix
-    unsigned num_images_this_batch = (batch_idx == num_batches-1) ? (num_inputs / num_batches) : (num_inputs % num_batches);
+    unsigned num_images_this_batch = (batch_idx != num_batches-1) ? (batchsize) : (num_inputs % num_batches);
     input_data = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_images_this_batch * num_pixels);
     FP_TYPE * image_data_csv_ptr = input_data;
     unsigned int * data_labels = (unsigned int *) malloc(sizeof(unsigned int) * num_inputs);

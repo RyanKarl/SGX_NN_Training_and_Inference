@@ -30,7 +30,7 @@ BUFFERING=-1
 DO_BACKPROP = True
 
 #Hardcoded names
-INPUT_FILE = 'fc1.txt'
+INPUT_FILE = 'mnist_train.csv'
 ARCH_FILE = 'Master_Arch.txt'
 LAYER_FILE = 'weights16.txt'
 
