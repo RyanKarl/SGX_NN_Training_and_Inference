@@ -6,7 +6,22 @@
 # define CHAR_BIT 8
 # endif
 
+#include <cstdint>
+#include <math.h>
+
 #define FP_TYPE double
+#define FLOAT_RAW_TYPE double
+#define FIXED_POINT_FRACTIONAL_BITS 5
+
+inline FLOAT_RAW_TYPE fixed_to_float(FP_TYPE x){
+  return ((FLOAT_RAW_TYPE)x / (FLOAT_RAW_TYPE)(1 << FIXED_POINT_FRACTIONAL_BITS));
+}
+
+inline FP_TYPE float_to_fixed(FLOAT_RAW_TYPE input)
+{
+    return (FP_TYPE)(round(input * (1 << FIXED_POINT_FRACTIONAL_BITS)));
+}
+
 
 # define NUM_MATRICES 3
 # define MAT_DIM 2

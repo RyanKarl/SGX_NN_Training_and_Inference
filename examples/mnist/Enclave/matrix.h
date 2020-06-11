@@ -2,6 +2,7 @@
 #define MATRIX_H
 #include <cmath>
 #include <cassert>
+#include <algorithm>
 
 #include "Enclave_Defines.h"
 
@@ -94,42 +95,108 @@ FP_TYPE * transpose(const FP_TYPE * x, const int width, const int height){
   }
   return ret;
 }
+/*
+#include <iostream>
+using std::cout;
+using std::endl;
+void print_floatmat(const FP_TYPE * fp, int width, int height){
+  for(int j = 0; j < height; j++){
+    for(int i = 0; i < width; i++){
+      cout << fp[(j*width)+i] << ' ';
+    }
+    cout << endl;
+  }
+  cout << endl;
+}
+*/
 
-
+//TODO rewrite to cut down on the loops
 //https://stats.stackexchange.com/questions/338285/how-does-the-subtraction-of-the-logit-maximum-improve-learning
 #define FP_LARGE_T double
-void softmax(FP_TYPE * x, const int total_elts){
+void softmax(FP_TYPE * x, const int width, const int height){
 #ifdef DEBUG
   assert(total_elts > 0);
 #endif  
-  //Get maximum element
-  FP_TYPE max_elt = x[0];
-  for(int i = 0; i < total_elts; i++){
-    if(max_elt > x[i]){
-      max_elt = x[i];
+
+  //Max. elt. of a row
+  FP_TYPE * max_elts = (FP_TYPE *) malloc(sizeof(FP_TYPE)*height);
+  for(int i = 0; i < height; i++){
+    for(int j = 0; j < width; j++){
+      max_elts[i] = !j ? x[(i*width)] : std::max(x[(i*width)+j], max_elts[i]);
     }
   }
-  //Calculate x - x.max
-  for(int i = 0; i < total_elts; i++){
-    x[i] -= max_elt;
+  //print_floatmat(max_elts, 1, height);
+  //Subtract the max. from each element of the rows
+  for(int i = 0; i < height; i++){
+    for(int j = 0; j < width; j++){
+      x[(i*width)+j] -= max_elts[i];
+    }
   }
-  FP_LARGE_T * x_tmp = (FP_LARGE_T *) malloc(sizeof(FP_LARGE_T) * total_elts);
-  //Exponentiate the matrix - hope this fits in FP_TYPE32!
-  FP_LARGE_T sum = 0;
-  for(int i = 0; i < total_elts; i++){
-    x_tmp[i] = exp(x[i]);
-    sum += x_tmp[i];
-#ifdef DEBUG
-    assert(x_tmp[i] > 0);
-    assert(x_tmp[i] < 1);
-#endif    
+  //print_floatmat(x, width, height);
+  free(max_elts);
+  max_elts = NULL;
+  FP_TYPE * sums = (FP_TYPE *) calloc(height, sizeof(FP_TYPE));
+  //Exponentiate, get sums of rows
+  for(int i = 0; i < height; i++){
+    for(int j = 0; j < width; j++){
+      sums[i] += (x[(i*width)+j] = exp(x[(i*width)+j]));
+    }
   }
+  //print_floatmat(x, width, height);
+  //print_floatmat(sums, 1, height);
+  //Divide
+  for(int i = 0; i < height; i++){
+    for(int j = 0; j < width; j++){
+      x[(i*width)+j] /= sums[i];
+    }
+  }
+  //print_floatmat(x, width, height);
+  free(sums);
+  sums = NULL;
+  return;
 
-  for(int i = 0; i < total_elts; i++){
-    x[i] = x_tmp[i]/sum;
+  /*
+  //Get maximum element of a column
+  FP_TYPE * max_elts = (FP_TYPE *) malloc(sizeof(FP_TYPE)*height);
+  for(int i = 0; i < height; i++){
+    for(int j = 0; j < width; j++){
+      max_elts[j] = !i ? x[i] : std::max(x[(j*width)+i], max_elts[i]);
+    }
   }
+  print_floatmat(max_elts, width, 1);
+  //Calculate x - x's col. max.
+  for(int i = 0; i < width; i++){
+    for(int j = 0; j < height; j++){
+       x[(j*height)+i] -= max_elts[i];
+    }
+  }
+  print_floatmat(x, width, height);
+  free(max_elts);
+  max_elts = NULL;
+  FP_TYPE * x_tmp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * width*height);
+  //Exponentiate the matrix - hope this fits in FP_TYPE32!
+  FP_TYPE * sums = (FP_TYPE *) calloc(height, sizeof(FP_TYPE));
+  for(int i = 0; i < height; i++){
+    for(int j = 0; j < width; j++){
+      x_tmp[(j*height)+i] = exp(x[(j*width)+i]);
+      sums[i] += x_tmp[(j*width)+i];
+    }   
+  }
+  print_floatmat(x_tmp, width, height);
+  print_floatmat(sums, width, 1);
+
+  for(int i = 0; i < height; i++){
+    for(int j = 0; j < width; j++){
+      x[(j*height)+i] = x_tmp[(j*height)+i]/sums[i];
+    }   
+  }
+  print_floatmat(x, width, height);
+
+  free(sums);
+  sums = NULL;
   free(x_tmp);
   return;
+  */
 }
 
 //https://stats.stackexchange.com/questions/215521/how-to-find-derivative-of-softmax-function-for-the-purpose-of-gradient-descent/328095
@@ -217,7 +284,7 @@ int argmax(FP_TYPE * data, int total_elts){
 
 int nan_idx(const FP_TYPE * data, const int num_elts){
   for(int i = 0; i < num_elts; i++){
-    if(data[i] != data[i]){
+    if(isnan(data[i])){
       return i;
     }
   }

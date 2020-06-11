@@ -20,7 +20,7 @@ for i in range(layers):
     print("GPU on layer " + str(i+1))
     if spc.good():
         a = spc.read_matrix_from_enclave()
-        a = a.astype(np.float64)
+        #a = a.astype(np.float64)
         activations[i] = a
         #print("a received by GPU: " + str(a))
         #print(a.shape)
@@ -29,7 +29,7 @@ for i in range(layers):
 
     if spc.good():
         b = spc.read_matrix_from_enclave()
-        b = b.astype(np.float64)
+        #b = b.astype(np.float64)
         weights[i] = b
         #print("b received by GPU: " + str(b))
         #print(b.shape)
