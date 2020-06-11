@@ -43,14 +43,15 @@ inline void rand_bytes(unsigned char * r, const size_t n_bytes){
 #endif
 
 #define RAND_BUF_T unsigned char
-void rand_floats(FP_TYPE * buf, size_t num_floats){
+void rand_floats(FP_TYPE * buf, size_t num_floats, unsigned int second_scale=1){
   RAND_BUF_T * tmp_buf = (RAND_BUF_T *) malloc(sizeof(RAND_BUF_T) * num_floats);
   rand_bytes(tmp_buf, sizeof(RAND_BUF_T) * num_floats);
   for(size_t i = 0; i < num_floats; i++){
     buf[i] = (FP_TYPE) tmp_buf[i];
     buf[i] /= (1 << (CHAR_BIT*sizeof(RAND_BUF_T)));
+    buf[i] /= second_scale;
     assert(buf[i] >= 0);
-    assert(buf[i] < 1);
+    assert(buf[i] < (1.0f)/second_scale);
     assert(!isnan(buf[i]));
   }
   free(tmp_buf);
@@ -869,12 +870,15 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         return 1;
       }
 #endif        
-      if(verbose >= 2){
-        print_out((char *) &("Read input from file"[0]), false);
-      }
+      
       image_data_csv_ptr += num_pixels; //Increment pointer
       data_labels_ptr++;
     }
+
+    if(verbose >= 2){
+        std::string read_str = "Read " + std::to_string(num_images_this_batch) + " inputs from " + std::string(input_csv_filename);
+        print_out((char *) &(read_str.c_str()[0]), false);
+      }
 
     FP_TYPE ** gpu_inputs = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * num_layers); //Slight misnomer - activated only by the prev. layer
     FP_TYPE ** gpu_outputs = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * (num_layers)); 
@@ -944,7 +948,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Mask weights
       int num_weights = num_neurons * layer_files[layer_idx].neurons;
       weights_mask[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_weights);
-      rand_floats(weights_mask[layer_idx], num_weights);
+      rand_floats(weights_mask[layer_idx], num_weights, WEIGHTS_SCALE);
       //Cast should be explicit, for the non-SGX version
       //rand_bytes((unsigned char *) weights_mask[layer_idx], sizeof(FP_TYPE) * num_weights);
       //rand_buf_to_floats(weights_mask[layer_idx], num_weights);

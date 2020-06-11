@@ -52,5 +52,7 @@ typedef struct {
 #define TASK_FORWARD 1
 #define TASK_BACKPROP 2
 
+#define WEIGHTS_SCALE 10
+
 
 #endif
