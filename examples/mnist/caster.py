@@ -22,7 +22,7 @@ for i in range(layers):
         a = spc.read_matrix_from_enclave()
         a = a.astype(np.float64)
         activations[i] = a
-        print("a received by GPU: " + str(a))
+        #print("a received by GPU: " + str(a))
         #print(a.shape)
     else:
         sys.exit(1)
@@ -31,14 +31,14 @@ for i in range(layers):
         b = spc.read_matrix_from_enclave()
         b = b.astype(np.float64)
         weights[i] = b
-        print("b received by GPU: " + str(b))
+        #print("b received by GPU: " + str(b))
         #print(b.shape)
     else:
         sys.exit(1)
 
     if spc.good():
         c = (a @ b)
-        print("c calculated by GPU: " + str(c))
+        #print("c calculated by GPU: " + str(c))
         spc.send_to_enclave(c)
         outputs[i] = c
         outdata = spc.validate_one_matrix(c)
@@ -55,7 +55,7 @@ for i in range(layers-1)[::-1]:
 
   if spc.good():
     grad_output = spc.read_matrix_from_enclave()
-    print("grad_output at layer " + str(i) + ": " + str(grad_output))
+    #print("grad_output at layer " + str(i) + ": " + str(grad_output))
 
   if grad_output is not None:
     print("Received grad_output at layer " + str(i))
