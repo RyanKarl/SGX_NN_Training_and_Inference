@@ -106,7 +106,7 @@ int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_
 
   if(reset){
     ifs.close();
-    ifs = std::ifstream(csv_filename);
+    ifs.open(csv_filename);
   }
 
   if(!ifs.good()){
