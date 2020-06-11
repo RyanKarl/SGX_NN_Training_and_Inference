@@ -974,8 +974,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out((char *) &("Failed to send weights data"[0]), true);
         return 1;
       }
-
-
       //Receive result back
       int num_result_neurons;
       int result_batchsize;
@@ -1060,13 +1058,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         //gpu_unmasked_result = NULL;
         assert(gpu_unmasked_h == (int) num_images_this_batch);
         assert(gpu_unmasked_w == (int) num_possible_labels);
-        softmax(gpu_unmasked_result, gpu_unmasked_w, gpu_unmasked_h);
-#ifdef NENCLAVE
-        if(verbose >= 3){
-          cout << "Result of softmax:" << endl;
-          print_floatarr(gpu_unmasked_result, gpu_unmasked_w*gpu_unmasked_h);
-        }
-#endif        
+        softmax(gpu_unmasked_result, gpu_unmasked_w, gpu_unmasked_h);   
       }
       
       //Also, don't deallocate weights either, also needed in backprop
