@@ -11,7 +11,7 @@ f = open("caster.dat", "wb")
 
 with open("Master_Arch.txt", 'r') as mf:
   arch = mf.readline()
-  archs = arch.split(',')
+  archs = arch.split(' ')
   EPOCHS = int(archs[-1])
 
 
