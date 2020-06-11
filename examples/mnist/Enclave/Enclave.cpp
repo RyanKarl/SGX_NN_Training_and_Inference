@@ -441,7 +441,7 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
       (FP_TYPE **) &c_prod_ptr, &prod_w, &prod_h, 0, 0); 
 
     assert(prod_w == final_data_width);
-    assert(prod_h == final_data_height);
+    assert(prod_h == 1);
   }
 
 
@@ -727,7 +727,8 @@ FP_TYPE crossentropy_loss(const unsigned int * actual, const FP_TYPE * predicted
   FP_TYPE sum = 0.0f;
   for(int i = 0; i < batchsize; i++){
     assert((int)actual[i] < num_possible_labels);
-    sum -= log(predicted[(i*num_possible_labels)+actual[i]]);
+    FP_TYPE tmp = predicted[(i*num_possible_labels)+actual[i]];
+    sum -= log(tmp);
   }
   return sum/batchsize;
 }
