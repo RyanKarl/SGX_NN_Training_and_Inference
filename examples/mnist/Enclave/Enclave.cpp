@@ -1102,7 +1102,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       if(verbose >= 2){
         //Loss for the whole batch
         FP_TYPE batch_loss = crossentropy_loss(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
-        std::string loss_str = "Loss this batch: " + std::to_string(batch_loss);
+        std::string loss_str = "Loss this batch: " + std::to_string(fixed_to_float(batch_loss));
         print_out((char *) &(loss_str.c_str()[0]), false);
       }
 

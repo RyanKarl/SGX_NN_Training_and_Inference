@@ -119,8 +119,8 @@ int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_
     ifs >> tmp >> comma_holder;
     //Normalize FP_TYPE value
     tmp /= (1 << CHAR_BIT);
-    vals[i] = tmp;
-    //vals[i] = float_to_fixed(tmp);
+    //vals[i] = tmp;
+    vals[i] = float_to_fixed(tmp);
   }
   int label_i;
   ifs >> label_i;
@@ -140,8 +140,8 @@ void print_out(char * msg, int error){
 int floats_to_csv(char * fname, size_t num_elts, FP_TYPE * data){
   ofstream ofs(fname);
   for(size_t i = 0; i < num_elts; i++){
-    ofs << data[i];
-    //ofs << fixed_to_float(data[i]);
+    //ofs << data[i];
+    ofs << fixed_to_float(data[i]);
     if(i != num_elts-1){
       ofs << ',';
     }
@@ -207,7 +207,7 @@ int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
     }
     FLOAT_RAW_TYPE tmp;
     fs >> tmp >> comma_holder;   
-    buf[i] = tmp; //float_to_fixed(tmp);
+    buf[i] = float_to_fixed(tmp);
   }
   return 0;
 }
