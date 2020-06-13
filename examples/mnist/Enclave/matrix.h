@@ -110,6 +110,10 @@ void print_floatmat(const FP_TYPE * fp, int width, int height){
 }
 */
 
+#include <iostream>
+using std::cout;
+using std::endl;
+
 //TODO rewrite to cut down on the loops
 //https://stats.stackexchange.com/questions/338285/how-does-the-subtraction-of-the-logit-maximum-improve-learning
 #define FP_LARGE_T double
@@ -118,12 +122,16 @@ void softmax(FP_TYPE * x, const int width, const int height){
   assert(total_elts > 0);
 #endif  
 
+  //cout << "Original:" << endl;
+
   //Max. elt. of a row
   FP_TYPE * max_elts = (FP_TYPE *) malloc(sizeof(FP_TYPE)*height);
   for(int i = 0; i < height; i++){
     for(int j = 0; j < width; j++){
       max_elts[i] = !j ? x[(i*width)] : std::max(x[(i*width)+j], max_elts[i]);
+      //cout << x[(i*width)+j] << ' ';
     }
+    //cout << endl;
   }
   //print_floatmat(max_elts, 1, height);
   //Subtract the max. from each element of the rows
@@ -148,9 +156,10 @@ void softmax(FP_TYPE * x, const int width, const int height){
   for(int i = 0; i < height; i++){
     for(int j = 0; j < width; j++){
       x[(i*width)+j] /= sums[i];
+      //std::cout << x[(i*width)+j] << ' ';    
     }
+    //std::cout << std::endl;
   }
-  //print_floatmat(x, width, height);
   free(sums);
   sums = NULL;
   return;

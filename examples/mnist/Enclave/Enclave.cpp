@@ -42,6 +42,7 @@ inline void rand_bytes(unsigned char * r, const size_t n_bytes){
 }
 #endif
 
+//TODO fix this to be between 0 and 1 quantized
 #define RAND_BUF_T unsigned char
 void rand_floats(FP_TYPE * buf, size_t num_floats, unsigned int second_scale=1){
   RAND_BUF_T * tmp_buf = (RAND_BUF_T *) malloc(sizeof(RAND_BUF_T) * num_floats);
@@ -723,15 +724,18 @@ void forward_demask(const FP_TYPE * input, const int input_width, const int inpu
 }
 
 //Actual is ground truth - 0 or 1 for each label
-FP_TYPE crossentropy_loss(const unsigned int * actual, const FP_TYPE * predicted,
+FLOAT_RAW_TYPE crossentropy_loss(const unsigned int * actual, const FP_TYPE * predicted,
  const int num_possible_labels, const int batchsize){
-  FP_TYPE sum = 0.0f;
+  //FP_TYPE sum = 0.0f;
+  FLOAT_RAW_TYPE sum = 0.0f;
   for(int i = 0; i < batchsize; i++){
     assert((int)actual[i] < num_possible_labels);
-    FP_TYPE tmp = predicted[(i*num_possible_labels)+actual[i]];
+    //FP_TYPE tmp = predicted[(i*num_possible_labels)+actual[i]];
+    FLOAT_RAW_TYPE tmp = fixed_to_float(predicted[(i*num_possible_labels)+actual[i]]);
+    assert(tmp >= 0.0f);
     sum -= log(tmp);
   }
-  return sum/batchsize;
+  return sum/(FLOAT_RAW_TYPE)batchsize;
 }
 
 //Allocates memory
@@ -917,7 +921,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     for(unsigned int layer_idx = 0; layer_idx < num_layers; layer_idx++){
       int num_neurons;
       num_neurons = layer_idx ? layer_files[layer_idx-1].neurons : num_pixels;
-      FP_TYPE * input_masking_target = NULL;
+      FP_TYPE * input_masking_target = NULL; //TODO remove
       if(!layer_idx){
         input_masking_target = gpu_inputs[layer_idx] = input_data;
         input_data = NULL;
@@ -931,6 +935,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //First, get the random mask
       input_masks[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE)*num_neurons*num_images_this_batch);
       rand_floats(input_masks[layer_idx], num_neurons*num_images_this_batch);
+
+      
+      cout << "Masks from enclave:" << endl;
+      print_floatarr(input_masks[layer_idx], num_images_this_batch*num_neurons);
+
+      
       //Cast should be explicit, for the non-SGX version
       //rand_bytes((unsigned char *) input_masks[layer_idx], sizeof(FP_TYPE)*num_neurons*num_images_this_batch);
       //Normalize mask
@@ -1101,8 +1111,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Print output
       if(verbose >= 2){
         //Loss for the whole batch
+        /*
         FP_TYPE batch_loss = crossentropy_loss(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
-        std::string loss_str = "Loss this batch: " + std::to_string(fixed_to_float(batch_loss));
+        FLOAT_RAW_TYPE loss_raw = fixed_to_float(batch_loss);
+        */
+        FLOAT_RAW_TYPE loss_raw = crossentropy_loss(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
+        std::string loss_str = "Loss this batch: " + std::to_string(loss_raw);
         print_out((char *) &(loss_str.c_str()[0]), false);
       }
 

@@ -28,8 +28,8 @@ for j in range(EPOCHS):
           a = spc.read_matrix_from_enclave()
           #a = a.astype(np.float64)
           activations[i] = a
-          #print("a received by GPU: " + str(a))
-          #print(a.shape)
+          print("a received by GPU: " + str(a))
+          print(a.shape)
       else:
           sys.exit(1)
 
@@ -37,14 +37,14 @@ for j in range(EPOCHS):
           b = spc.read_matrix_from_enclave()
           #b = b.astype(np.float64)
           weights[i] = b
-          #print("b received by GPU: " + str(b))
-          #print(b.shape)
+          print("b received by GPU: " + str(b))
+          print(b.shape)
       else:
           sys.exit(1)
 
       if spc.good():
           c = (a @ b)
-          #print("c calculated by GPU: " + str(c))
+          print("c calculated by GPU: " + str(c))
           spc.send_to_enclave(c)
           outputs[i] = c
           outdata = spc.validate_one_matrix(c)
