@@ -53,10 +53,12 @@ void rand_floats(FP_TYPE * buf, size_t num_floats, unsigned int second_scale=1){
     buf[i] /= (1 << (CHAR_BIT*sizeof(RAND_BUF_T)));
     buf[i] /= second_scale;
     */
-    FLOAT_RAW_TYPE mynum = static_cast<float> (tmp_buf[i]) / static_cast<float> (RAND_MAX);
+    //TODO inefficient - change later
+    FLOAT_RAW_TYPE mynum = ((static_cast<float> (tmp_buf[i] % RAND_MAX) / static_cast<float> (RAND_MAX))/second_scale);
     buf[i] = float_to_fixed(mynum);
+    buf[i] = round_float(buf[i]);
     assert(buf[i] >= 0);
-    //assert(buf[i] < (1.0f)/second_scale);
+    assert(buf[i] < (1.0f));
     assert(!isnan(buf[i]));
   }
   free(tmp_buf);
@@ -252,7 +254,7 @@ int mask(const FP_TYPE * input, const FP_TYPE * masks, int input_size, FP_TYPE *
     for(int i = 0; i < input_size; i++){
       assert(!isnan(input[i]));
       assert(!isnan(masks[i]));
-      output[i] = input[i] - masks[i];
+      output[i] = round_float(input[i]) - round_float(masks[i]);
     }
 
   }
@@ -260,7 +262,7 @@ int mask(const FP_TYPE * input, const FP_TYPE * masks, int input_size, FP_TYPE *
     for(int i = 0; i < input_size; i++){
       assert(!isnan(input[i]));
       assert(!isnan(masks[i]));
-      output[i] = input[i] + masks[i];
+      output[i] = round_float(input[i]) + round_float(masks[i]);
     }
   }
   return 0;
@@ -790,7 +792,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int num_pixels = 0;
   unsigned int num_possible_labels = 0;
   unsigned int num_epochs = 1;
-  bool skip_masking = true;
+  bool skip_masking = false; //Don't turn off
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -862,6 +864,11 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 #endif  
 
   for(unsigned int epoch_idx = 0; epoch_idx < num_epochs; num_epochs++){
+
+    if(verbose >= 2){
+      std::string eph_msg = "Enclave beginning epoch " + std::to_string(epoch_idx);
+      print_out((char *) &(eph_msg[0]), false);
+    }
 
     bool epoch_reset = true;
 
@@ -979,6 +986,10 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //rand_bytes((unsigned char *) weights_mask[layer_idx], sizeof(FP_TYPE) * num_weights);
       //rand_buf_to_floats(weights_mask[layer_idx], num_weights);
       //normalize(mask_weights, num_neurons);
+
+      //Quantize weights before masking
+      round_floatmat(layer_data[layer_idx], num_weights);
+
       if(!skip_masking){
         mask(layer_data[layer_idx], weights_mask[layer_idx], num_weights, layer_data[layer_idx], false);
         
@@ -1038,7 +1049,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       
       int gpu_unmasked_w, gpu_unmasked_h;
       if(!skip_masking){
-
+        //Unmask weights
         mask(layer_data[layer_idx], weights_mask[layer_idx], num_neurons, layer_data[layer_idx], true);
 
         forward_demask(gpu_inputs[layer_idx], num_neurons, num_images_this_batch,
@@ -1127,7 +1138,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         FLOAT_RAW_TYPE loss_raw = fixed_to_float(batch_loss);
         */
         FLOAT_RAW_TYPE loss_raw = crossentropy_loss(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
-        std::string loss_str = "Loss this batch: " + std::to_string(loss_raw);
+        std::string loss_str = "Loss: " + std::to_string(loss_raw) + " batch: " + std::to_string(batch_idx) + " epoch: " + std::to_string(epoch_idx);
         print_out((char *) &(loss_str.c_str()[0]), false);
       }
 
@@ -1175,10 +1186,18 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
             &d_ret, &e_ret, verbose);
 
           if(demask_result){
-            std::string out_str = "Failed in demasking at layer " + std::to_string(rev_layer_idx);
+            std::string out_str = "Failed in demasking at layer " + std::to_string(rev_layer_idx) 
+              + ", epoch " + std::to_string(epoch_idx) + ", batch " + std::to_string(batch_idx);
             print_out((char *) &(out_str[0]), true);
             return 1;
           }
+
+#ifdef NENCLAVE
+          if(verbose >= 2){
+            cout << "e_ret: ";
+            print_floatarr(e_ret, layer_files[rev_layer_idx].neurons*num_neurons);
+          }
+#endif          
 
           free(derivative);
           derivative = NULL;
@@ -1207,14 +1226,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       } //rev_layer_idx
 
 #ifdef NENCLAVE
-  if(finish_timing(TASK_BACKPROP)){
-    return 1;
-  }
+    if(finish_timing(TASK_BACKPROP)){
+      return 1;
+    }
 #else
-  ocall_status = finish_timing(&ocall_ret, TASK_BACKPROP);
-  if(ocall_ret){
-    return 1;
-  }
+    ocall_status = finish_timing(&ocall_ret, TASK_BACKPROP);
+    if(ocall_ret){
+      return 1;
+    }
 #endif 
 
       free(derivative);

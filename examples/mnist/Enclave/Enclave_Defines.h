@@ -11,7 +11,7 @@
 
 #define FP_TYPE float
 #define FLOAT_RAW_TYPE float
-#define FIXED_POINT_FRACTIONAL_BITS 16
+#define FIXED_POINT_FRACTIONAL_BITS 32
 #define SHIFT_T uint64_t
 #define USE_FIXED 0
 
@@ -41,7 +41,7 @@ inline FP_TYPE float_to_fixed(FLOAT_RAW_TYPE input)
 # define MAT_DIM 2
 # define K_PROBABILITY 2
 
-# define FLOAT_TOLERANCE 1
+# define FLOAT_TOLERANCE 4
 
 //Index in row-major order
 //i indexes width, j indexes height
