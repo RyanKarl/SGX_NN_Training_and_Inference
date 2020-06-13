@@ -9,18 +9,31 @@
 #include <cstdint>
 #include <math.h>
 
-#define FP_TYPE int32_t
+#define FP_TYPE float
 #define FLOAT_RAW_TYPE float
-#define FIXED_POINT_FRACTIONAL_BITS 23
+#define FIXED_POINT_FRACTIONAL_BITS 16
+#define SHIFT_T uint64_t
+#define USE_FIXED 0
 
-inline FLOAT_RAW_TYPE fixed_to_float(FP_TYPE x){
-  return ((FLOAT_RAW_TYPE)x / (FLOAT_RAW_TYPE)(1 << FIXED_POINT_FRACTIONAL_BITS));
+
+inline FLOAT_RAW_TYPE fixed_to_float(FP_TYPE x)
+{
+#if USE_FIXED
+  return ((FLOAT_RAW_TYPE)x / (FLOAT_RAW_TYPE)((SHIFT_T)1 << FIXED_POINT_FRACTIONAL_BITS));
+#else
+  return x;  
+#endif  
 }
+
 
 inline FP_TYPE float_to_fixed(FLOAT_RAW_TYPE input)
 {
-  return (FP_TYPE)(round(input * (1 << FIXED_POINT_FRACTIONAL_BITS)));
+#if USE_FIXED
+  return (FP_TYPE)(round(input * ((SHIFT_T)1 << FIXED_POINT_FRACTIONAL_BITS)));
     //return (FP_TYPE)(round(input * (1 << FIXED_POINT_FRACTIONAL_BITS)) / (1 << FIXED_POINT_FRACTIONAL_BITS));
+#else
+  return input;
+#endif  
 }
 
 

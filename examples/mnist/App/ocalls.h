@@ -112,7 +112,7 @@ int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_
   if(!ifs.good()){
     return 1;
   }
-  cout << "Read line from " <<  csv_filename << ": ";
+  //cout << "Read line from " <<  csv_filename << ": ";
   char comma_holder;
   for(unsigned int i = 0; i < num_vals; i++){
     FLOAT_RAW_TYPE tmp;
@@ -120,10 +120,11 @@ int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_
     //Normalize FP_TYPE value
     //tmp /= (1 << CHAR_BIT);
     //vals[i] = tmp;
-    vals[i] = float_to_fixed(tmp);
-    cout << vals[i] << ' ';
+    //Normalize value: [0, 255] -> [0,1]
+    vals[i] = float_to_fixed(tmp / ((1 << CHAR_BIT)-1));
+    //cout << vals[i] << ' ';
   }
-  cout << endl;
+  //cout << endl;
   int label_i;
   ifs >> label_i;
   *label = label_i;

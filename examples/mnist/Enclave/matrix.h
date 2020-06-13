@@ -309,5 +309,13 @@ int bounds_check(const FP_TYPE * data, const int num_elts, const FP_TYPE min, co
   return 0;
 }
 
+void round_floatmat(FP_TYPE * data, const int num_elts){
+  const static FP_TYPE step_d = ((unsigned int) 1) << ((sizeof(FP_TYPE)*CHAR_BIT) - 1);
+  for(int i = 0; i < num_elts; i++){    
+    data[i] = round(data[i]*step_d)/step_d;
+  }
+  return;
+}
+
 
 #endif

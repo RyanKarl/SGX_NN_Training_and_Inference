@@ -29,7 +29,10 @@ for j in range(EPOCHS):
           #a = a.astype(np.float64)
           activations[i] = a
           print("a received by GPU: " + str(a))
-          print(a.shape)
+          a_sum = np.sum(a)
+          print("Sum of a: " + str(a_sum))
+            
+          #print(a.shape)
       else:
           sys.exit(1)
 
@@ -38,7 +41,7 @@ for j in range(EPOCHS):
           #b = b.astype(np.float64)
           weights[i] = b
           print("b received by GPU: " + str(b))
-          print(b.shape)
+          #print(b.shape)
       else:
           sys.exit(1)
 

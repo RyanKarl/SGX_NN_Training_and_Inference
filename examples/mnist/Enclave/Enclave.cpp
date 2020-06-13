@@ -43,16 +43,20 @@ inline void rand_bytes(unsigned char * r, const size_t n_bytes){
 #endif
 
 //TODO fix this to be between 0 and 1 quantized
-#define RAND_BUF_T unsigned char
+#define RAND_BUF_T unsigned int
 void rand_floats(FP_TYPE * buf, size_t num_floats, unsigned int second_scale=1){
   RAND_BUF_T * tmp_buf = (RAND_BUF_T *) malloc(sizeof(RAND_BUF_T) * num_floats);
-  rand_bytes(tmp_buf, sizeof(RAND_BUF_T) * num_floats);
+  rand_bytes((unsigned char *) tmp_buf, sizeof(RAND_BUF_T) * num_floats);
   for(size_t i = 0; i < num_floats; i++){
+    /*
     buf[i] = (FP_TYPE) tmp_buf[i];
     buf[i] /= (1 << (CHAR_BIT*sizeof(RAND_BUF_T)));
     buf[i] /= second_scale;
+    */
+    FLOAT_RAW_TYPE mynum = static_cast<float> (tmp_buf[i]) / static_cast<float> (RAND_MAX);
+    buf[i] = float_to_fixed(mynum);
     assert(buf[i] >= 0);
-    assert(buf[i] < (1.0f)/second_scale);
+    //assert(buf[i] < (1.0f)/second_scale);
     assert(!isnan(buf[i]));
   }
   free(tmp_buf);
@@ -76,7 +80,7 @@ void rand_buf_to_floats(FP_TYPE * buf, size_t num_FP_TYPEs){
 #ifdef NENCLAVE
 void print_floatarr(const FP_TYPE * data, int size){
   for(int i = 0; i < size; i++){
-    cout << data[i] << ' ';
+    cout << fixed_to_float(data[i]) << ' ';
   }
   cout << endl;
 }
@@ -585,6 +589,8 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   weight_mask_transpose = NULL;
 
   //Send c_transformed to GPU 
+  //First, round it
+  round_floatmat(c_transformed, grad_output_height*grad_output_width);
   if(send_to_gpu(c_transformed, grad_output_height, grad_output_width, verbose)){
     print_out((char *) &("Failed to send c_transformed"[0]), true);
     return 1;
@@ -730,9 +736,9 @@ FLOAT_RAW_TYPE crossentropy_loss(const unsigned int * actual, const FP_TYPE * pr
   FLOAT_RAW_TYPE sum = 0.0f;
   for(int i = 0; i < batchsize; i++){
     assert((int)actual[i] < num_possible_labels);
-    //FP_TYPE tmp = predicted[(i*num_possible_labels)+actual[i]];
-    FLOAT_RAW_TYPE tmp = fixed_to_float(predicted[(i*num_possible_labels)+actual[i]]);
-    assert(tmp >= 0.0f);
+    FP_TYPE tmp = predicted[(i*num_possible_labels)+actual[i]];
+    //FLOAT_RAW_TYPE tmp = fixed_to_float(predicted[(i*num_possible_labels)+actual[i]]);
+    //assert(tmp >= 0.0f);
     sum -= log(tmp);
   }
   return sum/(FLOAT_RAW_TYPE)batchsize;
@@ -760,12 +766,14 @@ void update_weights(FP_TYPE * weights, const FP_TYPE * weights_gradient, const i
   return;
 }
 
+/*
 void normalize(FP_TYPE * x, int total_elts){
   for(int i = 0; i < total_elts; i++){
     x[i] = atan(x[i]) * (2.0f/M_PI);
   }
   return;
 }
+*/
 
 
 //NB weights are a COLUMN vector
@@ -782,7 +790,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int num_pixels = 0;
   unsigned int num_possible_labels = 0;
   unsigned int num_epochs = 1;
-  bool skip_masking = false;
+  bool skip_masking = true;
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -898,23 +906,18 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     FP_TYPE ** weights_mask = (FP_TYPE **) malloc(sizeof(FP_TYPE *) * num_layers);
 
 #ifdef NENCLAVE
-  if(start_timing(TASK_FORWARD)){
-    return 1;
-  }
+    if(start_timing(TASK_FORWARD)){
+      return 1;
+    }
 #else
-  ocall_status = start_timing(&ocall_ret, TASK_FORWARD);
-  if(ocall_ret){
-    return 1;
-  }
+    ocall_status = start_timing(&ocall_ret, TASK_FORWARD);
+    if(ocall_ret){
+      return 1;
+    }
 #endif  
 
     for(unsigned int i = 0; i < num_layers; i++){
       gpu_inputs[i] = input_masks[i] = weights_mask[i] = gpu_outputs[i] = NULL;
-      /*
-      if(i != num_layers-1){
-        gpu_outputs[i] = NULL;
-      }
-      */
     }
     
     //Now we have the whole batch in a single array
@@ -931,14 +934,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         gpu_unmasked_result = NULL;
       }
 
+      //Round off input
+      round_floatmat(input_masking_target, num_neurons*num_images_this_batch);
+
       //Mask the current input
       //First, get the random mask
       input_masks[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE)*num_neurons*num_images_this_batch);
       rand_floats(input_masks[layer_idx], num_neurons*num_images_this_batch);
 
       
-      cout << "Masks from enclave:" << endl;
-      print_floatarr(input_masks[layer_idx], num_images_this_batch*num_neurons);
+      //cout << "Masks from enclave:" << endl;
+      //print_floatarr(input_masks[layer_idx], num_images_this_batch*num_neurons);
 
       
       //Cast should be explicit, for the non-SGX version
@@ -963,8 +969,10 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         return 1;
       }
 
-      //Mask weights
       int num_weights = num_neurons * layer_files[layer_idx].neurons;
+      //Round off weights
+      round_floatmat(layer_data[layer_idx], num_weights);
+      //Mask weights
       weights_mask[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_weights);
       rand_floats(weights_mask[layer_idx], num_weights, WEIGHTS_SCALE);
       //Cast should be explicit, for the non-SGX version
@@ -979,6 +987,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out((char *) &("Finished masking weights"[0]), false);
       }
 
+      
       //Send weights to GPU
       if(send_to_gpu(layer_data[layer_idx], num_neurons, layer_files[layer_idx].neurons, verbose)){
         print_out((char *) &("Failed to send weights data"[0]), true);
@@ -1051,7 +1060,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         
       }
       else{
-         gpu_unmasked_result = gpu_outputs[layer_idx];
+         gpu_unmasked_result = (FP_TYPE *) malloc(sizeof(FP_TYPE)*result_batchsize*layer_files[layer_idx].neurons);
+         memcpy(gpu_unmasked_result, gpu_outputs[layer_idx], sizeof(FP_TYPE)*result_batchsize*layer_files[layer_idx].neurons);
+         //gpu_unmasked_result = gpu_outputs[layer_idx];
          gpu_unmasked_h = result_batchsize;
          gpu_unmasked_w = layer_files[layer_idx].neurons;
       }

@@ -15,10 +15,10 @@ TMPDIR = "/tmp/"
 FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
 INT_BYTES = 4
 
-NP_FLOATYPE = np.int32
+NP_FLOATYPE = np.float32
 FLOAT_BYTES = 4
 # f for float, d for double
-STRUCT_PACK_FMT = 'i'
+STRUCT_PACK_FMT = 'f'
 
 # endianess
 BYTEORDER = sys.byteorder
