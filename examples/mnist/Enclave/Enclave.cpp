@@ -54,12 +54,15 @@ void rand_floats(FP_TYPE * buf, size_t num_floats, unsigned int second_scale=1){
     buf[i] /= second_scale;
     */
     //TODO inefficient - change later
+    /*
     FLOAT_RAW_TYPE mynum = ((static_cast<float> (tmp_buf[i] % RAND_MAX) / static_cast<float> (RAND_MAX))/second_scale);
     buf[i] = float_to_fixed(mynum);
     buf[i] = round_float(buf[i]);
     assert(buf[i] >= 0);
     assert(buf[i] < (1.0f));
     assert(!isnan(buf[i]));
+    */
+    buf[i] = 0.0f;
   }
   free(tmp_buf);
   tmp_buf = NULL;
@@ -157,7 +160,7 @@ int frievald(const FP_TYPE * a, const FP_TYPE * b, const FP_TYPE * c,
     //cout << "axbr[" << i << "] " << axbr[i] << " cr[" << i << "] " << cr[i] << endl;
     if (FLOAT_CMP(axbr[i], cr[i])){
 #ifdef NENCLAVE    
-        cout << "axbr " << axbr[i] << " cr " << cr[i] << " i " << i << endl;
+        cerr << "axbr " << axbr[i] << " cr " << cr[i] << " i " << i << endl;
 #endif
         free(axbr);
         free(cr);
@@ -184,7 +187,7 @@ int verify_frievald(const FP_TYPE * a, const FP_TYPE * b, const FP_TYPE * c,
         b_width, b_height,
         c_width, c_height)){
 #ifdef NENCLAVE
-      cout << "Frievalds' failed on pass " << j << endl;
+      cerr << "Frievalds' failed on pass " << j << endl;
 #endif
   		return 1;
   	}
@@ -792,7 +795,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int num_pixels = 0;
   unsigned int num_possible_labels = 0;
   unsigned int num_epochs = 1;
-  bool skip_masking = false; //Don't turn off
+  bool skip_masking = true; 
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -1193,9 +1196,11 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           }
 
 #ifdef NENCLAVE
-          if(verbose >= 2){
-            cout << "e_ret: ";
-            print_floatarr(e_ret, layer_files[rev_layer_idx].neurons*num_neurons);
+          if(verbose >= 2 && false){
+            std::string msg = "Weights before update at layer " + std::to_string(rev_layer_idx) + " batch " 
+              + std::to_string(batch_idx) + " epoch " + std::to_string(epoch_idx) + ':';
+            cout << msg << endl;
+            print_floatarr(layer_data[rev_layer_idx], layer_files[rev_layer_idx].neurons*num_neurons);
           }
 #endif          
 
