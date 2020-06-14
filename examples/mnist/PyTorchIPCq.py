@@ -261,21 +261,21 @@ def SGXB(grad_output, input, weight, output):
     #diff3 = rand_mask @ weight_rand_mask.t()
     #diff_term = diff3 - diff2 - diff1
     a_mul_wmask = (a @ weight_rand_mask.t())
-    weight_mask_weights = (weight_rand_mask - b).t()
+    weight_mask_weights = (weight_rand_mask - b).t() #Don't transpose this'
     diff_term = (rand_mask @ weight_mask_weights)
     diff_term -= a_mul_wmask 
     #c = c * (1-torch.tanh(g + diff_term)**2)
-    c= transform_and_mult(c, g, diff_term)
+    c_transformed = transform_and_mult(c, g, diff_term)
    
     #Send(c matrix to GPU)
     #Receive(d = c @ b)
-    d = c @ b
+    d = c_transformed @ b
 
-    grm_transformed = transform(grad_rand_mask, diff_term)
-    weightrandmask_b = (weight_rand_mask - b)
-    diffc_diffa = grm_transformed @ weightrandmask_b
+    grad_rand_mask = transform(grad_rand_mask, diff_term)
+    weightrandmask_b = (weight_rand_mask - b) #Transpose this
+    diffc_diffa = grad_rand_mask @ weightrandmask_b
     #diffa = (1-torch.tanh(grad_rand_mask + diff_term)**2) @ b
-    diffb = c @ weight_rand_mask
+    diffb = c_transformed @ weight_rand_mask
     #diffc = (1-torch.tanh(grad_rand_mask + diff_term)**2) @ weight_rand_mask
     
     d += diffc_diffa - diffb
@@ -284,9 +284,9 @@ def SGXB(grad_output, input, weight, output):
     #ct = ct * (1-torch.tanh(g + diff_term)**2)
     
     #Receive(e = c.t() @ a)
-    e = c.t() @ a
+    e = c_transformed.t() @ a
     #print(e)
-    diffx = c.t() @ rand_mask
+    diffx = c_transformed.t() @ rand_mask
     #diffy = grm_transformed.t() @ a 
     #diffz = grm_transformed.t() @ rand_mask
     rm_a = (rand_mask - a)
