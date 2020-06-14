@@ -3,7 +3,7 @@ from torch.optim.optimizer import Optimizer, required
 from torch.autograd import Variable
 import pickle
 super_mega_mask = pickle.load(open("mask.p", 'rb')).to("cuda:0") 
-
+#super_mega_mask = torch.zeros(super_mega_mask.shape).to("cuda:0")
 
 class MyLoss(torch.nn.CrossEntropyLoss):
     def __init__(self, weight=None, size_average=None, ignore_index=-100,

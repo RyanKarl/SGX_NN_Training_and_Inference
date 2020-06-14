@@ -11,6 +11,7 @@ input_ = input
 
 torch.set_default_dtype(torch.float32)
 super_mega_mask = pickle.load(open("mask.p", 'rb')).to("cuda:0") #torch.rand(10000,10000, device = "cuda:0") * 1
+#super_mega_mask = torch.zeros(super_mega_mask.shape).to("cuda:0")
 
 def my_cross_entropy(x, y):
     #x = x - 1
