@@ -74,7 +74,7 @@ def SGXBL(grad_output, input, weight):
         c = grad_output.clone()
 
     pre_shape = c.shape
-    cprod = torch.zeros(c.shape)
+    cprod = torch.zeros(c.shape).to("cuda:0")
     # c = c[:,None,:]
     # c = c @ softmax_der(softmax(a @ b.t()))
     softder = softmax_der(softmax(a @ b.t()))
@@ -296,7 +296,7 @@ def SGXB(grad_output, input, weight, output):
     #diffy = grm_transformed.t() @ a 
     #diffz = grm_transformed.t() @ rand_mask
     rm_a = (rand_mask - a)
-    diffz_diffy = grm_transformed.t() @ rm_a
+    diffz_diffy = grad_rand_mask.t() @ rm_a
     diffz_diffy -= diffx
     e += diffz_diffy 
 
