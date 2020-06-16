@@ -222,7 +222,7 @@ int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
     if(!fs.good()){
       return 1;
     }
-    FLOAT_RAW_TYPE tmp;
+    //FLOAT_RAW_TYPE tmp;
     fs >> buf[i] >> comma_holder;   
     //buf[i] = float_to_fixed(tmp);
   }

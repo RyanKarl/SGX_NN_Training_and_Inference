@@ -446,19 +446,15 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
     //Get the right part of the buffer to write to
     c_prod_ptr = c_prod + (i*final_data_width);
     //Now multiply
-    //Argument order switched
     matrix_multiply(grad_output + (i*grad_output_width), grad_output_width, 1,
       soft_der, final_data_width, final_data_width, //Same args for w and h intentional
       (FP_TYPE **) &c_prod_ptr, &prod_w, &prod_h, 0, 0); 
-    /*
-    matrix_multiply(grad_output_transposed + (i*grad_output_width), grad_output_width, 1,
-      soft_der, final_data_width, final_data_width, //Same args for w and h intentional
-      (FP_TYPE **) &c_prod_ptr, &prod_w, &prod_h, 0, 0); 
-      */
 
     assert(prod_w == final_data_width);
     assert(prod_h == 1);
   }
+
+  c_prod_ptr = NULL;
 
 
 
@@ -467,7 +463,6 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
   free(soft_der);
   soft_der = NULL;
 
-  //*d_ret = (FP_TYPE *) malloc(sizeof(FP_TYPE *) * input_height * weights_height);
   
   //Transpose b
   FP_TYPE * b_transpose = transpose(weights, weights_width, weights_height);
@@ -478,12 +473,6 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
     b_transpose, weights_height, weights_width,
     d_ret, &d_w, &d_h, 0);
 
-/*
-#ifdef NENCLAVE
-    cout << "d_ret last layer result: ";
-    print_floatarr(*d_ret, d_w * d_h);
-#endif  
-*/
 
   free(b_transpose);
   b_transpose = NULL;
@@ -502,7 +491,8 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
   //TODO transpose e
   *e_ret = transpose(e, e_w, e_h);
 
-
+  free(e);
+  e = NULL;
   free(c_t);
   c_t = NULL;
 
@@ -625,19 +615,23 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   free(weights_transpose);
   weights_transpose = NULL; 
   
-  FP_TYPE * difftemp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height*weights_width);
+  //FP_TYPE * difftemp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height*weights_width);
   
-  matrix_sub(diffc_diffa, diffb, grad_output_height*weights_width, difftemp);
+  //matrix_sub(diffc_diffa, diffb, grad_output_height*weights_width, difftemp);
+
+  for(int i = 0; i < grad_output_height*weights_width; i++){
+    d[i] += diffc_diffa[i] - diffb[i];
+  }
 
   free(diffc_diffa);
   diffc_diffa = NULL;
   free(diffb);
   diffb = NULL;
   
-  matrix_add(d, difftemp, grad_output_height*weights_width, d);
+  //matrix_add(d, difftemp, grad_output_height*weights_width, d);
 
-  free(difftemp);
-  difftemp = NULL;
+  //free(difftemp);
+  //difftemp = NULL;
 
   FP_TYPE * diffx;
   int diffx_w, diffx_h;
@@ -682,8 +676,6 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   }
   //Verify that e == c_transformed.t() @ a
   //First, get transposed of c_transformed
-  //This is redundant
-  //FP_TYPE * c_t_t = transpose(c_transformed, grad_output_width, grad_output_height);
   if(verify_frievald(c_transpose, input, e,
       grad_output_height, grad_output_width, 
       input_width, input_height,
@@ -697,29 +689,31 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
 
   free(c_transformed);
   c_transformed = NULL;
-  /*
-  free(c_t_t);
-  c_t_t = NULL;
-  */
+
   assert(e_w == weights_height);
   assert(e_h == weights_width);
+
+  for(int i = 0; i < input_height*input_width; i++){
+    e[i] += diffz_diffy - diffx;
+  }
   
-  matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
-  matrix_add(e, diffz_diffy, input_height*input_width, e);
-
-  //Transpose error
-  *e_ret = transpose(e, e_w, e_h);
-
   free(diffz_diffy);
   diffz_diffy = NULL;
 
   free(diffx);
   diffx = NULL;
 
-  //*e_ret = e;
+  //matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
+  //matrix_add(e, diffz_diffy, input_height*input_width, e);
+
+  //Transpose error
+  *e_ret = transpose(e, e_w, e_h);
+
+  free(e);
+  e = NULL;
+
   *d_ret = d;
   return 0;
-
 }
 
 void forward_demask(const FP_TYPE * input, const int input_width, const int input_height,
@@ -751,18 +745,14 @@ void forward_demask(const FP_TYPE * input, const int input_width, const int inpu
 }
 
 //Actual is ground truth - 0 or 1 for each label
-FLOAT_RAW_TYPE crossentropy_loss(const unsigned int * actual, const FP_TYPE * predicted,
+FP_TYPE crossentropy_loss(const unsigned int * actual, const FP_TYPE * predicted,
  const int num_possible_labels, const int batchsize){
-  //FP_TYPE sum = 0.0f;
-  FLOAT_RAW_TYPE sum = 0.0f;
+  FP_TYPE sum = 0.0f;
   for(int i = 0; i < batchsize; i++){
     assert((int)actual[i] < num_possible_labels);
-    FP_TYPE tmp = predicted[(i*num_possible_labels)+actual[i]];
-    //FLOAT_RAW_TYPE tmp = fixed_to_float(predicted[(i*num_possible_labels)+actual[i]]);
-    //assert(tmp >= 0.0f);
-    sum -= log(tmp);
+    sum -= log(predicted[(i*num_possible_labels)+actual[i]]);
   }
-  return sum/(FLOAT_RAW_TYPE)batchsize;
+  return sum/(FP_TYPE)batchsize;
 }
 
 //Allocates memory
@@ -939,6 +929,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       num_neurons = layer_idx ? layer_files[layer_idx-1].neurons : num_pixels;
       FP_TYPE * input_masking_target = NULL; //TODO remove
       if(!layer_idx){
+        //TODO remove this
         input_masking_target = gpu_inputs[layer_idx] = input_data;
         input_data = NULL;
       }
@@ -1082,7 +1073,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   }
 #endif 
 
-
     if(backprop){
 
       if(verbose >= 2){
@@ -1157,30 +1147,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
             weights_mask[rev_layer_idx],
             derivative, layer_files[rev_layer_idx].neurons, num_images_this_batch,
             &d_ret, &e_ret, verbose);
-
-
-#ifdef NENCLAVE
-          if(verbose >= 2){
-            cout << "e_ret: ";
-            print_floatarr(e_ret, num_neurons*layer_files[rev_layer_idx].neurons);
-          }
-#endif          
+     
 
           if(demask_result){
             std::string out_str = "Failed in demasking at layer " + std::to_string(rev_layer_idx) 
               + ", epoch " + std::to_string(epoch_idx) + ", batch " + std::to_string(batch_idx);
             print_out((char *) &(out_str[0]), true);
             return 1;
-          }
-
-#ifdef NENCLAVE
-          if(verbose >= 2 && false){
-            std::string msg = "Weights before update at layer " + std::to_string(rev_layer_idx) + " batch " 
-              + std::to_string(batch_idx) + " epoch " + std::to_string(epoch_idx) + ':';
-            cout << msg << endl;
-            print_floatarr(layer_data[rev_layer_idx], layer_files[rev_layer_idx].neurons*num_neurons);
-          }
-#endif          
+          }     
 
           free(derivative);
           derivative = NULL;
@@ -1310,7 +1284,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
 }
 
-//TODO consistent verbosity levels
+//Verbosity levels:
 //0 no output (except in case of error)
 //1 timing data
 //2 logging
