@@ -101,7 +101,7 @@ int close_streams(){
 
 
 
-int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_t num_vals, bool reset = false){
+int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_t num_vals, int reset = 0){
   static std::ifstream ifs(csv_filename);
 
   if(reset){

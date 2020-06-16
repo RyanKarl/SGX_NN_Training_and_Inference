@@ -111,8 +111,8 @@ void print_floatmat(const FP_TYPE * fp, int width, int height){
 */
 
 #include <iostream>
-using std::cout;
-using std::endl;
+//using std::cout;
+//using std::endl;
 
 //TODO rewrite to cut down on the loops
 //https://stats.stackexchange.com/questions/338285/how-does-the-subtraction-of-the-logit-maximum-improve-learning
