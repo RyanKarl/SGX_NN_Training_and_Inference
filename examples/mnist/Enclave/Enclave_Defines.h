@@ -41,7 +41,7 @@ inline FP_TYPE float_to_fixed(FLOAT_RAW_TYPE input)
 # define MAT_DIM 2
 # define K_PROBABILITY 2
 
-# define FLOAT_TOLERANCE 1e-1
+# define FLOAT_TOLERANCE 1e-4
 
 //Index in row-major order
 //i indexes width, j indexes height

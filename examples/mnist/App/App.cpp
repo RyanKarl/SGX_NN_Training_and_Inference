@@ -236,7 +236,6 @@ int main(int argc, char ** argv){
 #define SEED 5
   srand(SEED);
 
-
   //i and o are filenames of named pipe
   char * input_pipe_path = NULL;
   char * output_pipe_path = NULL;

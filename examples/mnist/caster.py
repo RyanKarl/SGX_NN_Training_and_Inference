@@ -88,6 +88,8 @@ for j in range(EPOCHS):
         print("Received grad_output at layer " + str(i))
       else:
         print("ERROR receiving grad_output at layer " + str(i))  
+        
+      print("gradoutput at layer ", i, " epoch ", j, str(grad_output))  
 
       d = grad_output @ weights[i].transpose()
          
@@ -114,6 +116,8 @@ for j in range(EPOCHS):
         outdata = spc.validate_one_matrix(e)
         f.write(outdata[0])
         f.write(outdata[1])    
+        
+      print("e_sent back by enclave at layer ", i, " epoch ", j, str(e))
         
       print("Sent d, e at layer " + str(i))   
         

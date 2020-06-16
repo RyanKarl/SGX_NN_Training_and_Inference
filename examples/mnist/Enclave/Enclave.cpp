@@ -493,10 +493,15 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
   FP_TYPE * c_t = transpose(c_prod, final_data_width, final_data_height);
   free(c_prod);
   c_prod = NULL;
+  FP_TYPE * e = NULL;
   int e_w, e_h;
   matrix_multiply(c_t, final_data_height, final_data_width, //Swapped for transpose
     input, input_width, input_height,
-    e_ret, &e_w, &e_h);
+    &e, &e_w, &e_h);
+
+  //TODO transpose e
+  *e_ret = transpose(e, e_w, e_h);
+
 
   free(c_t);
   c_t = NULL;
@@ -513,6 +518,8 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   const FP_TYPE * weights_mask,
   FP_TYPE * grad_output, const int grad_output_width, const int grad_output_height,
   FP_TYPE ** d_ret, FP_TYPE ** e_ret, int verbose = 0){
+
+  assert(grad_output_height == input_height);
 
   FP_TYPE * a_mul_wmask;
   int a_mul_wmask_height;
@@ -593,7 +600,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
 
   //Send c_transformed to GPU 
   //First, round it
-  round_floatmat(c_transformed, grad_output_height*grad_output_width);
+  //round_floatmat(c_transformed, grad_output_height*grad_output_width);
   if(send_to_gpu(c_transformed, grad_output_height, grad_output_width, verbose)){
     print_out((char *) &("Failed to send c_transformed"[0]), true);
     return 1;
@@ -641,8 +648,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
     input_mask, input_width, input_height,
     &diffx, &diffx_w, &diffx_h);
 
-  free(c_transpose);
-  c_transpose = NULL;
+  
 
   FP_TYPE * grm_transposed = transpose(grad_rand_mask, grad_output_width, outputs_height);
 
@@ -651,7 +657,8 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
 
 
   FP_TYPE * rand_mask_a = (FP_TYPE *) malloc(sizeof(FP_TYPE) * input_height*input_width);
-  matrix_add(input_mask, input, input_height*input_width, rand_mask_a);
+  //matrix_sub
+  matrix_sub(input_mask, input, input_height*input_width, rand_mask_a);
 
 
   FP_TYPE * diffz_diffy;
@@ -675,8 +682,9 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   }
   //Verify that e == c_transformed.t() @ a
   //First, get transposed of c_transformed
-  FP_TYPE * c_t_t = transpose(c_transformed, grad_output_width, grad_output_height);
-  if(verify_frievald(c_t_t, input, e,
+  //This is redundant
+  //FP_TYPE * c_t_t = transpose(c_transformed, grad_output_width, grad_output_height);
+  if(verify_frievald(c_transpose, input, e,
       grad_output_height, grad_output_width, 
       input_width, input_height,
       e_w, e_h)){
@@ -684,13 +692,23 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
     return 1;
   }
 
+  free(c_transpose);
+  c_transpose = NULL;
+
   free(c_transformed);
   c_transformed = NULL;
+  /*
   free(c_t_t);
   c_t_t = NULL;
-
+  */
+  assert(e_w == weights_height);
+  assert(e_h == weights_width);
+  
   matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
   matrix_add(e, diffz_diffy, input_height*input_width, e);
+
+  //Transpose error
+  *e_ret = transpose(e, e_w, e_h);
 
   free(diffz_diffy);
   diffz_diffy = NULL;
@@ -698,7 +716,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   free(diffx);
   diffx = NULL;
 
-  *e_ret = e;
+  //*e_ret = e;
   *d_ret = d;
   return 0;
 
@@ -759,25 +777,12 @@ FP_TYPE * crossentropy_derivative(const unsigned int * actual, const FP_TYPE * p
 }
 
 
-
-
-
 void update_weights(FP_TYPE * weights, const FP_TYPE * weights_gradient, const int total_elts, const FP_TYPE learning_rate){
   for(int i = 0; i < total_elts; i++){
     weights[i] -= learning_rate*weights_gradient[i];
   }
   return;
 }
-
-/*
-void normalize(FP_TYPE * x, int total_elts){
-  for(int i = 0; i < total_elts; i++){
-    x[i] = atan(x[i]) * (2.0f/M_PI);
-  }
-  return;
-}
-*/
-
 
 //NB weights are a COLUMN vector
 
@@ -950,18 +955,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       input_masks[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE)*num_neurons*num_images_this_batch);
       rand_floats(input_masks[layer_idx], num_neurons*num_images_this_batch);
 
-      
-      //cout << "Masks from enclave:" << endl;
-      //print_floatarr(input_masks[layer_idx], num_images_this_batch*num_neurons);
-
-      
-      //Cast should be explicit, for the non-SGX version
-      //rand_bytes((unsigned char *) input_masks[layer_idx], sizeof(FP_TYPE)*num_neurons*num_images_this_batch);
-      //Normalize mask
-      //normalize(mask_data, num_neurons*num_images_this_batch);
-      //rand_buf_to_floats(input_masks[layer_idx], num_neurons*num_images_this_batch);
       //Next, mask the data
-
       if(!skip_masking){
         mask(input_masking_target, input_masks[layer_idx], num_neurons*num_images_this_batch, gpu_inputs[layer_idx], false);
       }
@@ -984,9 +978,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       weights_mask[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_weights);
       rand_floats(weights_mask[layer_idx], num_weights, WEIGHTS_SCALE);
       //Cast should be explicit, for the non-SGX version
-      //rand_bytes((unsigned char *) weights_mask[layer_idx], sizeof(FP_TYPE) * num_weights);
-      //rand_buf_to_floats(weights_mask[layer_idx], num_weights);
-      //normalize(mask_weights, num_neurons);
 
       //Quantize weights before masking
       round_floatmat(layer_data[layer_idx], num_weights);
@@ -999,7 +990,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         print_out((char *) &("Finished masking weights"[0]), false);
       }
 
-      
       //Send weights to GPU
       if(send_to_gpu(layer_data[layer_idx], num_neurons, layer_files[layer_idx].neurons, verbose)){
         print_out((char *) &("Failed to send weights data"[0]), true);
@@ -1028,9 +1018,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           layer_files[layer_idx].neurons, num_neurons,
           num_result_neurons, result_batchsize)){
         //Verification failed!
-
         print_out((char *) &("Frievalds' algorithm failed!"[0]), true);
-        //return 1;
       }
       else{
 
@@ -1059,22 +1047,11 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           weights_mask[layer_idx], 
           gpu_outputs[layer_idx],
           &gpu_unmasked_result, &gpu_unmasked_w, &gpu_unmasked_h);
- 
-        /*
-        forward_demask(gpu_result, num_neurons, num_images_this_batch,
-          input_masks[layer_idx], 
-          layer_data[layer_idx], layer_files[layer_idx].neurons, num_neurons,
-          weights_mask[layer_idx], 
-          &gpu_unmasked_result, &gpu_unmasked_w, &gpu_unmasked_h);
-        */
-        //Undo masking
-        //May later just have a seperate buffer for masked weights
         
       }
       else{
          gpu_unmasked_result = (FP_TYPE *) malloc(sizeof(FP_TYPE)*result_batchsize*layer_files[layer_idx].neurons);
          memcpy(gpu_unmasked_result, gpu_outputs[layer_idx], sizeof(FP_TYPE)*result_batchsize*layer_files[layer_idx].neurons);
-         //gpu_unmasked_result = gpu_outputs[layer_idx];
          gpu_unmasked_h = result_batchsize;
          gpu_unmasked_w = layer_files[layer_idx].neurons;
       }
@@ -1082,13 +1059,9 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
       //Save result from GPU and activate
       if(layer_idx != num_layers-1){
-        //unactivated_outputs[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE) * gpu_unmasked_h*gpu_unmasked_w);
-        //memcpy(unactivated_outputs[layer_idx], gpu_unmasked_result, sizeof(FP_TYPE) * gpu_unmasked_h*gpu_unmasked_w);
         activate(gpu_unmasked_result, gpu_unmasked_h, gpu_unmasked_w);
       }
       else{
-        //unactivated_outputs[layer_idx] = gpu_unmasked_result;
-        //gpu_unmasked_result = NULL;
         assert(gpu_unmasked_h == (int) num_images_this_batch);
         assert(gpu_unmasked_w == (int) num_possible_labels);
         softmax(gpu_unmasked_result, gpu_unmasked_w, gpu_unmasked_h);   
@@ -1134,10 +1107,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Print output
       if(verbose >= 2){
         //Loss for the whole batch
-        /*
-        FP_TYPE batch_loss = crossentropy_loss(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
-        FLOAT_RAW_TYPE loss_raw = fixed_to_float(batch_loss);
-        */
         FLOAT_RAW_TYPE loss_raw = crossentropy_loss(data_labels, gpu_unmasked_result, num_possible_labels, num_images_this_batch);
         std::string loss_str = "Loss: " + std::to_string(loss_raw) + " batch: " + std::to_string(batch_idx) + " epoch: " + std::to_string(epoch_idx);
         print_out((char *) &(loss_str.c_str()[0]), false);
@@ -1188,6 +1157,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
             weights_mask[rev_layer_idx],
             derivative, layer_files[rev_layer_idx].neurons, num_images_this_batch,
             &d_ret, &e_ret, verbose);
+
+
+#ifdef NENCLAVE
+          if(verbose >= 2){
+            cout << "e_ret: ";
+            print_floatarr(e_ret, num_neurons*layer_files[rev_layer_idx].neurons);
+          }
+#endif          
 
           if(demask_result){
             std::string out_str = "Failed in demasking at layer " + std::to_string(rev_layer_idx) 

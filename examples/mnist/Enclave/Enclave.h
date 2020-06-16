@@ -19,7 +19,6 @@ int frievald(FP_TYPE * a, FP_TYPE * b, FP_TYPE * c,
 int verify_frievald(FP_TYPE * data, int a_height, int a_width, int b_height, int b_width, int c_height, int c_width);
 
 //Return 1 if activation fails, 0 if successful
-//int activate(FP_TYPE * data, int height, int width); //Reference or value?
 
 //Trust that data_in and data_out have the correct size
 //Buffers must be allocated outside the enclave!
@@ -31,9 +30,6 @@ First line contains one positive integer stating the number of inputs, and two f
 Lines after are in the format:
 height width filename type
 */
-//TODO make this an OCALL
-
-
 
 int enclave_main(char * network_structure_fname, char * input_csv_filename, char * inpipe_fname, char * outpipe_fname, char * weights_outfile, int backprop, int verbose);
 
