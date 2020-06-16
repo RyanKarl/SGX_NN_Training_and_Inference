@@ -183,7 +183,7 @@ int file_to_string(char * fname, char * out, size_t str_buf_len){
   oss << network_ifs.rdbuf();
 
   unsigned int len = oss.str().size() + 1;
-  if(len >= str_buf_len){
+  if(len != str_buf_len){
     return 1;
   }
   strncpy(out, oss.str().c_str(), len);
