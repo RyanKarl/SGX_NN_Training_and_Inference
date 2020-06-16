@@ -95,7 +95,7 @@ for j in range(EPOCHS):
       if is_zero_mat(activations[i]):
         print("WARNING: activations at layer " + str(i) + " is ZERO")
       #print("grad_output of GPU: " + str(grad_output.transpose()))
-      print("activations of GPU: " + str(activations[i]))
+      #print("activations of GPU: " + str(activations[i]))
 
 
       if spc.good():

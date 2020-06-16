@@ -8,8 +8,8 @@ using namespace std;
 
 #define ARG_SIZE 3
 
-/*
-void print_floatmat(const FP_TYPE * fp, int height, int width){
+
+void print_floatmat(const FP_TYPE * fp, int width, int height){
 	for(int j = 0; j < height; j++){
 		for(int i = 0; i < width; i++){
 			cout << fp[(j*width)+i] << ' ';
@@ -18,7 +18,7 @@ void print_floatmat(const FP_TYPE * fp, int height, int width){
 	}
 	cout << endl;
 }
-*/
+
 
 int main(int argc, char ** argv){
 	//float * arg = (float *) malloc(sizeof(float) * ARG_SIZE);
@@ -32,9 +32,12 @@ int main(int argc, char ** argv){
 	
 	
 	softmax(arg, ARG_SIZE, 2);
+	FP_TYPE * deriv = (FP_TYPE *) malloc(3*3*sizeof(FP_TYPE));
+	softmax_derivative(arg, 3, deriv);
 	//float * result = softmax_derivative(arg, ARG_SIZE);
-	cout << "Original:" << endl;
-	print_floatmat(arg, 3, 2);
+	cout << "Derivative:" << endl;
+	print_floatmat(deriv, 3, 3);
+	assert(is_symmetric(deriv, 3));
 	/*
 	cout << "Result:" << endl;
 	print_floatmat(result, ARG_SIZE, ARG_SIZE);

@@ -447,9 +447,14 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
     c_prod_ptr = c_prod + (i*final_data_width);
     //Now multiply
     //Argument order switched
+    matrix_multiply(grad_output + (i*grad_output_width), grad_output_width, 1,
+      soft_der, final_data_width, final_data_width, //Same args for w and h intentional
+      (FP_TYPE **) &c_prod_ptr, &prod_w, &prod_h, 0, 0); 
+    /*
     matrix_multiply(grad_output_transposed + (i*grad_output_width), grad_output_width, 1,
       soft_der, final_data_width, final_data_width, //Same args for w and h intentional
       (FP_TYPE **) &c_prod_ptr, &prod_w, &prod_h, 0, 0); 
+      */
 
     assert(prod_w == final_data_width);
     assert(prod_h == 1);
