@@ -216,12 +216,12 @@ int parse_structure(char * network_structure_fname, vector<layer_file_t> & layer
 
 
 #ifdef NENCLAVE
-  if(file_to_string(network_structure_fname, str_in, file_len)){
+  if(file_to_string(network_structure_fname, str_in, file_len+1)){
     return 1;
   }
 #else
   int ocall_ret;
-  ocall_status = file_to_string(&ocall_ret, network_structure_fname, str_in, file_len);
+  ocall_status = file_to_string(&ocall_ret, network_structure_fname, str_in, file_len+1);
   if(ocall_ret){
     return 1;
   }
