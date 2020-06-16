@@ -104,6 +104,13 @@ int close_streams(){
 int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_t num_vals, int reset = 0){
   static std::ifstream ifs(csv_filename);
 
+  if(vals == NULL){
+    vals = (FP_TYPE *) malloc(sizeof(FP_TYPE)*num_vals);
+  }
+  if(label == NULL){
+    label = (unsigned int *) malloc(sizeof(unsigned int));
+  }
+
   if(reset){
     ifs.close();
     ifs.open(csv_filename);
@@ -168,11 +175,15 @@ int file_to_string(char * fname, char * out, size_t str_buf_len){
   ifstream network_ifs(fname);
   std::ostringstream oss;
   assert(network_ifs.good());
+
+  if(out == NULL){
+    out = (char *) malloc(sizeof(char) * str_buf_len);
+  }
   
   oss << network_ifs.rdbuf();
 
   unsigned int len = oss.str().size() + 1;
-  if(len >= STRUCTURE_BUFLEN){
+  if(len >= str_buf_len){
     return 1;
   }
   strncpy(out, oss.str().c_str(), len);
