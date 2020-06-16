@@ -95,20 +95,6 @@ FP_TYPE * transpose(const FP_TYPE * x, const int width, const int height){
   }
   return ret;
 }
-/*
-#include <iostream>
-using std::cout;
-using std::endl;
-void print_floatmat(const FP_TYPE * fp, int width, int height){
-  for(int j = 0; j < height; j++){
-    for(int i = 0; i < width; i++){
-      cout << fp[(j*width)+i] << ' ';
-    }
-    cout << endl;
-  }
-  cout << endl;
-}
-*/
 
 #include <iostream>
 using std::cout;
@@ -208,25 +194,6 @@ void transform_and_mult(const FP_TYPE * y, const FP_TYPE * g, const FP_TYPE * te
   return;
 }
 
-/*
-FP_TYPE * transform(const FP_TYPE * x, const FP_TYPE * term, const int width, const int height, const int use_softmax){
-  FP_TYPE * difference = (FP_TYPE *) malloc(sizeof(FP_TYPE) * width * height);
-  matrix_sub(x, term, width*height, difference);
-  if(!use_softmax){
-    activate(difference, width, height);
-  }
-  else{
-    softmax(difference, width*height);
-  }
-  FP_TYPE * squared;
-  int p_w, p_h;
-  matrix_multiply(difference, width, height, difference, width, height, &squared, &p_w, &p_h, 0);
-  free(difference);
-  difference = NULL;
-  sub_from_ones(squared, width*height);
-  return squared;
-}
-*/
 
 int argmax(FP_TYPE * data, int total_elts){
   int idx = 0;
@@ -258,7 +225,7 @@ int bounds_check(const FP_TYPE * data, const int num_elts, const FP_TYPE min, co
   return 0;
 }
 
-const static FP_TYPE step_d = ((uint64_t) 1) << (FIXED_POINT_FRACTIONAL_BITS - 1);
+const static uint64_t step_d = ((uint64_t) 1) << (FIXED_POINT_FRACTIONAL_BITS - 1);
 
 FP_TYPE round_float(const FP_TYPE & dat){
   return round(dat*step_d)/step_d;
