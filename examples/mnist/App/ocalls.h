@@ -203,6 +203,9 @@ int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf){
 //Assumes comma-delimited
 int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
   ifstream fs(filename);
+  if(buf == NULL){
+    buf = (FP_TYPE *) malloc(sizeof(FP_TYPE) * bufsize);
+  }
   char comma_holder;
   for(size_t i = 0; i < bufsize/sizeof(FP_TYPE); i++){
     if(!fs.good()){
