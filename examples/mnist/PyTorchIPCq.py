@@ -284,7 +284,8 @@ def SGXB(grad_output, input, weight, output):
     diffb = c_transformed @ weight_rand_mask
     #diffc = (1-torch.tanh(grad_rand_mask + diff_term)**2) @ weight_rand_mask
     
-    d += diffc_diffa - diffb
+    diffc_diffa =- diffb
+    d += diffc_diffa
     #ct = grad_output.clone() - grad_rand_mask
     #transform(ct, g, diff_term)
     #ct = ct * (1-torch.tanh(g + diff_term)**2)

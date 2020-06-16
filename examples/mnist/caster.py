@@ -97,6 +97,9 @@ for j in range(EPOCHS):
       #print("grad_output of GPU: " + str(grad_output.transpose()))
       #print("activations of GPU: " + str(activations[i]))
 
+      
+      #print("d from GPU: " + str(d))
+      #print("e from GPU: " + str(e))
 
       if spc.good():
         spc.send_to_enclave(d)

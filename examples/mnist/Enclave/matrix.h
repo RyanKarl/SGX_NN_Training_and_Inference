@@ -163,56 +163,11 @@ void softmax(FP_TYPE * x, const int width, const int height){
   free(sums);
   sums = NULL;
   return;
-
-  /*
-  //Get maximum element of a column
-  FP_TYPE * max_elts = (FP_TYPE *) malloc(sizeof(FP_TYPE)*height);
-  for(int i = 0; i < height; i++){
-    for(int j = 0; j < width; j++){
-      max_elts[j] = !i ? x[i] : std::max(x[(j*width)+i], max_elts[i]);
-    }
-  }
-  print_floatmat(max_elts, width, 1);
-  //Calculate x - x's col. max.
-  for(int i = 0; i < width; i++){
-    for(int j = 0; j < height; j++){
-       x[(j*height)+i] -= max_elts[i];
-    }
-  }
-  print_floatmat(x, width, height);
-  free(max_elts);
-  max_elts = NULL;
-  FP_TYPE * x_tmp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * width*height);
-  //Exponentiate the matrix - hope this fits in FP_TYPE32!
-  FP_TYPE * sums = (FP_TYPE *) calloc(height, sizeof(FP_TYPE));
-  for(int i = 0; i < height; i++){
-    for(int j = 0; j < width; j++){
-      x_tmp[(j*height)+i] = exp(x[(j*width)+i]);
-      sums[i] += x_tmp[(j*width)+i];
-    }   
-  }
-  print_floatmat(x_tmp, width, height);
-  print_floatmat(sums, width, 1);
-
-  for(int i = 0; i < height; i++){
-    for(int j = 0; j < width; j++){
-      x[(j*height)+i] = x_tmp[(j*height)+i]/sums[i];
-    }   
-  }
-  print_floatmat(x, width, height);
-
-  free(sums);
-  sums = NULL;
-  free(x_tmp);
-  return;
-  */
 }
 
 //https://stats.stackexchange.com/questions/215521/how-to-find-derivative-of-softmax-function-for-the-purpose-of-gradient-descent/328095
 //Returns a pointer to dynamically freed memory
 void softmax_derivative(const FP_TYPE * y, const int n, FP_TYPE * y_squared){
-  //First, create the identity matrix
-  //FP_TYPE * y_squared;
   int y_sq_h, y_sq_w;
   matrix_multiply(y, 1, n, y, n, 1, (FP_TYPE **) &y_squared, &y_sq_w, &y_sq_h, 0, 0); 
   assert(y_sq_w == n);
@@ -227,20 +182,14 @@ void softmax_derivative(const FP_TYPE * y, const int n, FP_TYPE * y_squared){
   return;
 }
 
-/*
-FP_TYPE * softmax_derivative(FP_TYPE * s, 
-  const int num_vectors, const int vector_height){
-  FP_TYPE * ret = (FP_TYPE *) calloc(num_vectors*vector_height*vector_height, sizeof(FP_TYPE));
-  //Index ret as a list of square matrices
-  for(int i = 0; i < num_vectors; i++){
-    for(int j = 0; j < vector_height; j++){
-      ret[(i*vector_height*vector_height)+(j*num_vectors)+j] = s[(i*vector_height) + j];
-    }
-  }
-  //ret now holds the diagonal embedding in a 3d matrix
 
+void transform(const FP_TYPE * y, const FP_TYPE * term, const int total_elts, FP_TYPE * ret){
+  for(int i = 0; i < total_elts; i++){
+    FP_TYPE tmp = tanh(y[i] + term[i]);
+    ret[i] = 1.0f - (tmp*tmp);
+  }
+  return;
 }
-*/
 
 FP_TYPE * transform(const FP_TYPE * y, const FP_TYPE * term, const int total_elts){
   FP_TYPE * ret = (FP_TYPE *) malloc(sizeof(FP_TYPE)*total_elts);
@@ -309,7 +258,7 @@ int bounds_check(const FP_TYPE * data, const int num_elts, const FP_TYPE min, co
   return 0;
 }
 
-const static FP_TYPE step_d = ((uint64_t) 1) << ((sizeof(FP_TYPE)*CHAR_BIT) - 1);
+const static FP_TYPE step_d = ((uint64_t) 1) << (FIXED_POINT_FRACTIONAL_BITS - 1);
 
 FP_TYPE round_float(const FP_TYPE & dat){
   return round(dat*step_d)/step_d;
@@ -320,6 +269,17 @@ void round_floatmat(FP_TYPE * data, const int num_elts){
     data[i] = round_float(data[i]);
   }
   return;
+}
+
+bool is_symmetric(const FP_TYPE * data, const int n){
+  for(int i = 0; i < n; i++){
+    for(int j = 0; j < n; j++){
+      if(abs(data[(j*n)+i] - data[(i*n)+j]) >= 1e-2){
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 

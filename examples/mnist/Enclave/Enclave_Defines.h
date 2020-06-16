@@ -11,7 +11,7 @@
 
 #define FP_TYPE float
 #define FLOAT_RAW_TYPE float
-#define FIXED_POINT_FRACTIONAL_BITS 32
+#define FIXED_POINT_FRACTIONAL_BITS 16
 #define SHIFT_T uint64_t
 #define USE_FIXED 0
 
