@@ -115,7 +115,7 @@ int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_
   //cout << "Read line from " <<  csv_filename << ": ";
   char comma_holder;
   for(unsigned int i = 0; i < num_vals; i++){
-    FLOAT_RAW_TYPE tmp;
+    //FLOAT_RAW_TYPE tmp;
     ifs >> vals[i] >> comma_holder;
     //Normalize FP_TYPE value
     vals[i] /= (1 << CHAR_BIT);
