@@ -74,9 +74,15 @@ def SGXBL(grad_output, input, weight):
         c = grad_output.clone()
 
     pre_shape = c.shape
-    c = c[:,None,:]
-    c = c @ softmax_der(softmax(a @ b.t()))
-    c = c.reshape(pre_shape)
+    cprod = torch.zeros(c.shape)
+    # c = c[:,None,:]
+    # c = c @ softmax_der(softmax(a @ b.t()))
+    softder = softmax_der(softmax(a @ b.t()))
+    for i in range(c.shape[0]):
+        cprod[i] = c[i] @ softder[i]
+
+    c = cprod
+    # c = c.reshape(pre_shape)
     d = c @ b
     e = c.t().mm(a)
     weight_rand_mask = super_mega_mask[0:e.shape[0], 0:e.shape[1]]
