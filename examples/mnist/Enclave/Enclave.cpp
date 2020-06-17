@@ -566,7 +566,11 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   int diffc_diffa_w, diffc_diffa_h;  
 
   //Apply transform to grad_rand_mask
-  transform(grad_rand_mask, diff_term, grad_output_height*grad_output_width);
+  //transform(grad_rand_mask, diff_term, grad_output_height*grad_output_width, grad_rand_mask);
+  //FP_TYPE * res = transform(grad_rand_mask, diff_term, grad_output_height*grad_output_width);
+  //free(res);
+  //res = NULL;
+
 
   free(diff_term);
   diff_term = NULL;
@@ -615,13 +619,15 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   free(weights_transpose);
   weights_transpose = NULL; 
   
-  //FP_TYPE * difftemp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height*weights_width);
+  FP_TYPE * difftemp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height*weights_width);
   
-  //matrix_sub(diffc_diffa, diffb, grad_output_height*weights_width, difftemp);
+  matrix_sub(diffc_diffa, diffb, grad_output_height*weights_width, difftemp);
 
+  /*
   for(int i = 0; i < grad_output_height*weights_width; i++){
     d[i] += diffc_diffa[i] - diffb[i];
   }
+  */
 
   free(diffc_diffa);
   diffc_diffa = NULL;
@@ -693,21 +699,25 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   assert(e_w == weights_height);
   assert(e_h == weights_width);
 
+  /*
   for(int i = 0; i < input_height*input_width; i++){
     e[i] += diffz_diffy - diffx;
   }
+  */
   
+  
+
+  matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
+  matrix_add(e, diffz_diffy, input_height*input_width, e);
+
+  //Transpose error
+  *e_ret = transpose(e, e_w, e_h);
+
   free(diffz_diffy);
   diffz_diffy = NULL;
 
   free(diffx);
   diffx = NULL;
-
-  //matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
-  //matrix_add(e, diffz_diffy, input_height*input_width, e);
-
-  //Transpose error
-  *e_ret = transpose(e, e_w, e_h);
 
   free(e);
   e = NULL;
