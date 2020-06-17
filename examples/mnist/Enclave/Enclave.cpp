@@ -854,7 +854,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     print_out((char *) &("Read in weights"[0]), false);
   }
 
-  unsigned num_batches = (num_inputs / batchsize) + ((num_inputs % batchsize) ? 0 : 1);
+  unsigned int num_batches = (num_inputs / batchsize) + ((num_inputs % batchsize) ? 1 : 0);
+
+#ifdef NENCLAVE
+  if(verbose >= 2){
+    cout << "num_batches: " << num_batches << endl;
+  }
+#endif  
 
   FP_TYPE * input_data;
 
@@ -880,7 +886,10 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     for(unsigned int batch_idx = 0; batch_idx < num_batches; batch_idx++){
     //Get images into a matrix
-    unsigned num_images_this_batch = (batch_idx != num_batches-1) ? (batchsize) : (num_inputs % num_batches);
+    unsigned num_images_this_batch = batchsize;
+    if(batch_idx == num_batches-1){
+      num_images_this_batch = (num_inputs % num_batches) ? (num_inputs % num_batches) : batchsize;
+    }
     input_data = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_images_this_batch * num_pixels);
     FP_TYPE * image_data_csv_ptr = input_data;
     unsigned int * data_labels = (unsigned int *) malloc(sizeof(unsigned int) * num_inputs);
@@ -1113,6 +1122,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
 
       for(int rev_layer_idx = num_layers-1; rev_layer_idx >= 0; rev_layer_idx--){
+
+        if(verbose >= 2){
+          std::string backprop_status = "Backprop on layer " + std::to_string(rev_layer_idx) + ", batch " + std::to_string(batch_idx)
+            + ", epoch " + std::to_string(epoch_idx);
+          print_out(&(backprop_status[0]), false);  
+        }
 
         if(rev_layer_idx == (int)num_layers-1){
           FP_TYPE * d_ret = NULL;
