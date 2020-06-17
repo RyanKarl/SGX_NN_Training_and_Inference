@@ -3,11 +3,14 @@ from SPController import SPController
 import numpy as np
 import sys
 
+FILE_OUT = True
+
 spc = SPController(debug=False)
 
 spc.start(verbose=3)
 
-f = open("caster.dat", "wb")
+if FILE_OUT:
+  f = open("caster.dat", "wb")
 
 with open("Master_Arch.txt", 'r') as mf:
   arch = mf.readline()
@@ -52,6 +55,10 @@ for j in range(EPOCHS):
        
           c = (a @ b)
           spc.send_to_enclave(c)
+          if FILE_OUT:
+            outdata = spc.validate_one_matrix(c)
+            f.write(outdata[0])
+            f.write(outdata[1])
           outputs[i] = c
           
     for i in range(layers-1)[::-1]: 
@@ -64,6 +71,14 @@ for j in range(EPOCHS):
       spc.send_to_enclave(d)
 
       spc.send_to_enclave(e)
+      
+      if FILE_OUT:
+        d_out = spc.validate_one_matrix(d)
+        f.write(d_out[0])
+        f.write(d_out[1])
+        e_out = spc.validate_one_matrix(e)
+        f.write(e_out[0])
+        f.write(e_out[1])
 
 
           
