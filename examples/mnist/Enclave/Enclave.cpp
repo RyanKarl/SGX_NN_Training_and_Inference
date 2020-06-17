@@ -893,6 +893,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       num_images_this_batch = (num_inputs % num_batches) ? (num_inputs % num_batches) : batchsize;
     }
     input_data = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_images_this_batch * num_pixels);
+    assert(input_data != NULL);
     FP_TYPE * image_data_csv_ptr = input_data;
     unsigned int * data_labels = (unsigned int *) malloc(sizeof(unsigned int) * num_inputs);
     unsigned int * data_labels_ptr = data_labels;
