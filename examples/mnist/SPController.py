@@ -10,9 +10,9 @@ import numpy as np
 from subprocess import PIPE
 
 ENCLAVE_EXE_PATH = "./app"
-TMPDIR = "/tmp/"
+TMPDIR = "~/"
 #Name is of the writer
-FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
+FIFO_NAMES = {"gpu":TMPDIR+".gpu.pipe", "enclave":TMPDIR+".enclave.pipe"}
 INT_BYTES = 4
 
 NP_FLOATYPE = np.float32
