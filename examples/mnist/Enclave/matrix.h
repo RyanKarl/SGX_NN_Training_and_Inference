@@ -33,7 +33,9 @@ void matrix_multiply(const FP_TYPE * a, const int a_width, const int a_height,
   *c_height = a_height;
   if(alloc_new){
     *c = (FP_TYPE *) malloc(sizeof(FP_TYPE)*(*c_width)*(*c_height));
+    
   }
+  assert(*c != NULL);
   
   if(!negate){
     for(int i = 0; i < a_height; i++){
@@ -88,6 +90,7 @@ int activate_derivative(FP_TYPE * data, int total_elts){
 
 FP_TYPE * transpose(const FP_TYPE * x, const int width, const int height){
   FP_TYPE * ret = (FP_TYPE *) malloc(sizeof(FP_TYPE) * width * height);
+  assert(ret != NULL);
   for(int i = 0; i < width; i++){
     for(int j = 0; j < height; j++){
       INDEX_FLOATMAT(ret, j, i, height) = INDEX_FLOATMAT(x, i, j, width);
@@ -104,14 +107,14 @@ FP_TYPE * transpose(const FP_TYPE * x, const int width, const int height){
 //https://stats.stackexchange.com/questions/338285/how-does-the-subtraction-of-the-logit-maximum-improve-learning
 #define FP_LARGE_T double
 void softmax(FP_TYPE * x, const int width, const int height){
-#ifdef DEBUG
-  assert(total_elts > 0);
-#endif  
+
+  assert(x != NULL);
 
   //cout << "Original:" << endl;
 
   //Max. elt. of a row
   FP_TYPE * max_elts = (FP_TYPE *) malloc(sizeof(FP_TYPE)*height);
+  assert(max_elts != NULL);
   for(int i = 0; i < height; i++){
     for(int j = 0; j < width; j++){
       max_elts[i] = !j ? x[(i*width)] : std::max(x[(i*width)+j], max_elts[i]);
@@ -130,6 +133,7 @@ void softmax(FP_TYPE * x, const int width, const int height){
   free(max_elts);
   max_elts = NULL;
   FP_TYPE * sums = (FP_TYPE *) calloc(height, sizeof(FP_TYPE));
+  assert(sums != NULL);
   //Exponentiate, get sums of rows
   for(int i = 0; i < height; i++){
     for(int j = 0; j < width; j++){
@@ -154,8 +158,10 @@ void softmax(FP_TYPE * x, const int width, const int height){
 //https://stats.stackexchange.com/questions/215521/how-to-find-derivative-of-softmax-function-for-the-purpose-of-gradient-descent/328095
 //Returns a pointer to dynamically freed memory
 void softmax_derivative(const FP_TYPE * y, const int n, FP_TYPE * y_squared){
+  assert(y_squared != NULL);
   int y_sq_h, y_sq_w;
   matrix_multiply(y, 1, n, y, n, 1, (FP_TYPE **) &y_squared, &y_sq_w, &y_sq_h, 0, 0); 
+  assert(y_squared != NULL);
   assert(y_sq_w == n);
   assert(y_sq_h == n); 
   for(int i = 0; i < n; i++){
@@ -170,6 +176,7 @@ void softmax_derivative(const FP_TYPE * y, const int n, FP_TYPE * y_squared){
 
 
 void transform(const FP_TYPE * y, const FP_TYPE * term, const int total_elts, FP_TYPE * ret){
+  assert(ret != NULL);
   for(int i = 0; i < total_elts; i++){
     FP_TYPE tmp = tanh(y[i] + term[i]);
     ret[i] = 1.0f - (tmp*tmp);
@@ -179,6 +186,7 @@ void transform(const FP_TYPE * y, const FP_TYPE * term, const int total_elts, FP
 
 FP_TYPE * transform(const FP_TYPE * y, const FP_TYPE * term, const int total_elts){
   FP_TYPE * ret = (FP_TYPE *) malloc(sizeof(FP_TYPE)*total_elts);
+  assert(ret != NULL);
   for(int i = 0; i < total_elts; i++){
     FP_TYPE tmp = tanh(y[i] + term[i]);
     ret[i] = 1.0f - (tmp*tmp);
@@ -187,6 +195,7 @@ FP_TYPE * transform(const FP_TYPE * y, const FP_TYPE * term, const int total_elt
 }
 
 void transform_and_mult(const FP_TYPE * y, const FP_TYPE * g, const FP_TYPE * term, FP_TYPE * ret, const int total_elts){
+  assert(ret != NULL);
   for(int i = 0; i < total_elts; i++){
     FP_TYPE tmp = tanh(g[i] + term[i]);
     ret[i] = y[i] * (1.0f - (tmp*tmp));

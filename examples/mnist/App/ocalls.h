@@ -229,7 +229,6 @@ int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
   return 0;
 }
 
-
 static high_resolution_clock::time_point overall_start;
 static high_resolution_clock::time_point forward_start;
 static high_resolution_clock::time_point backprop_start;
