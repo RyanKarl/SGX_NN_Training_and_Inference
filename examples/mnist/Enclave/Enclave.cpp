@@ -628,16 +628,17 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
     d[i] += diffc_diffa[i] - diffb[i];
   }
   */
+  
 
   free(diffc_diffa);
   diffc_diffa = NULL;
   free(diffb);
   diffb = NULL;
   
-  //matrix_add(d, difftemp, grad_output_height*weights_width, d);
+  matrix_add(d, difftemp, grad_output_height*weights_width, d);
 
-  //free(difftemp);
-  //difftemp = NULL;
+  free(difftemp);
+  difftemp = NULL;
 
   FP_TYPE * diffx;
   int diffx_w, diffx_h;
@@ -706,9 +707,10 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   */
   
   
-
+  
   matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
   matrix_add(e, diffz_diffy, input_height*input_width, e);
+  
 
   //Transpose error
   *e_ret = transpose(e, e_w, e_h);
