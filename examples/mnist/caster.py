@@ -18,12 +18,14 @@ with open("Master_Arch.txt", 'r') as mf:
   EPOCHS = int(archs[-1])
   num_inputs = int(archs[0])
   batchsize = int(archs[1])
+  layers = int(archs[3])
   num_batches = int(num_inputs / batchsize)
   if (num_inputs % batchsize) != 0:
     num_batches += 1
+    
+print("Epochs: ", EPOCHS)
+print("Batches: ", num_batches)    
 
-
-layers = 5
 
 activations = [None] * layers
 weights = [None] * layers
@@ -40,7 +42,7 @@ for j in range(EPOCHS):
   print("GPU starting epoch " + str(j))
   for b_idx in range(num_batches):
     for i in range(layers):
-    
+          print("GPU (forward) on batch ", b_idx, ", epoch ", j, ", layer ", i)
           a = spc.read_matrix_from_enclave()
             #a = a.astype(np.float64)
           activations[i] = a
@@ -62,7 +64,7 @@ for j in range(EPOCHS):
           outputs[i] = c
           
     for i in range(layers-1)[::-1]: 
-
+      print("GPU (backwards) on batch ", b_idx, ", epoch ", j, ", layer ", i)
       grad_output = spc.read_matrix_from_enclave()
       d = grad_output @ weights[i].transpose()
          
@@ -81,5 +83,5 @@ for j in range(EPOCHS):
         f.write(e_out[1])
 
 
-          
+print("GPU finished, waiting on enclave")          
 spc.close(force=False)        
