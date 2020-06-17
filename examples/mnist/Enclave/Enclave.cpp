@@ -933,13 +933,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
     input_data = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_images_this_batch * num_pixels);
     assert(input_data != NULL);
     FP_TYPE * image_data_csv_ptr = input_data;
-    unsigned int * data_labels = (unsigned int *) malloc(sizeof(unsigned int) * num_inputs);
+    unsigned int * data_labels = (unsigned int *) malloc(sizeof(unsigned int) * num_images_this_batch);
     unsigned int * data_labels_ptr = data_labels;
 
     //FP_TYPE * final_data = NULL;
     FP_TYPE * gpu_unmasked_result = NULL;
 
     for(unsigned int image_idx = 0; image_idx < num_images_this_batch; image_idx++){
+      *data_labels_ptr = num_possible_labels;
 #ifdef NENCLAVE        
       if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels, epoch_reset)){
         print_out((char *) &("Failed to read input .csv"[0]), true);
@@ -952,6 +953,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         return 1;
       }
 #endif      
+      assert(*data_labels_ptr < num_possible_labels);
       epoch_reset = false; //Only reset stream on first go of an epoch  
       
       image_data_csv_ptr += num_pixels; //Increment pointer
