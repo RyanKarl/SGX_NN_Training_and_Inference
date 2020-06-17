@@ -9,10 +9,12 @@ import struct
 import numpy as np
 from subprocess import PIPE
 
+USER = os.environ.get('USER')
 ENCLAVE_EXE_PATH = "./app"
-TMPDIR = "./"
+TMPDIR = "/tmp/." + USER + '_'
+#TMPDIR = os.path.abspath(TMPDIR)
 #Name is of the writer
-FIFO_NAMES = {"gpu":TMPDIR+".gpu.pipe", "enclave":TMPDIR+".enclave.pipe"}
+FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
 INT_BYTES = 4
 
 NP_FLOATYPE = np.float32
