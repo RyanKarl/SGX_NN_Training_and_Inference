@@ -1,6 +1,8 @@
 //App.cpp
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
+//Compile without SGX as:
 //g++ App/App.cpp Enclave/Enclave.cpp -pedantic -Wall  -O3 -o ./app -lm -DNENCLAVE
+//Example run commands:
 //./app -s Master_Arch.txt -c mnist_train.csv -i caster.dat -o enclave_out.dat -v -v -v -b
 //./app -s Master_Arch.txt -c fc1.txt -i dummy_gpu.dat -o enclave_out.dat -v -v
 //Defined first to go before other standard libs

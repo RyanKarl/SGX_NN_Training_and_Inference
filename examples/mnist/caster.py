@@ -7,7 +7,9 @@ FILE_OUT = True
 
 spc = SPController(debug=False)
 
-spc.start(verbose=3)
+VERBOSITY = 1
+
+spc.start(verbose=VERBOSITY)
 
 if FILE_OUT:
   f = open("caster.dat", "wb")
@@ -23,8 +25,9 @@ with open("Master_Arch.txt", 'r') as mf:
   if (num_inputs % batchsize) != 0:
     num_batches += 1
     
-print("Epochs: ", EPOCHS)
-print("Batches: ", num_batches)    
+if VERBOSITY >= 2:    
+  print("Epochs: ", EPOCHS)
+  print("Batches: ", num_batches)    
 
 
 activations = [None] * layers
@@ -39,10 +42,12 @@ def is_zero_mat(arg):
     
 
 for j in range(EPOCHS):
-  print("GPU starting epoch " + str(j))
+  if VERBOSITY >= 2: 
+    print("GPU starting epoch " + str(j))
   for b_idx in range(num_batches):
     for i in range(layers):
-          print("GPU (forward) on batch ", b_idx, ", epoch ", j, ", layer ", i)
+          if VERBOSITY >= 2:
+            print("GPU (forward) on batch ", b_idx, ", epoch ", j, ", layer ", i)
           a = spc.read_matrix_from_enclave()
             #a = a.astype(np.float64)
           activations[i] = a
@@ -64,7 +69,8 @@ for j in range(EPOCHS):
           outputs[i] = c
           
     for i in range(layers-1)[::-1]: 
-      print("GPU (backwards) on batch ", b_idx, ", epoch ", j, ", layer ", i)
+      if VERBOSITY >= 2:
+        print("GPU (backwards) on batch ", b_idx, ", epoch ", j, ", layer ", i)
       grad_output = spc.read_matrix_from_enclave()
       d = grad_output @ weights[i].transpose()
          
@@ -82,6 +88,6 @@ for j in range(EPOCHS):
         f.write(e_out[0])
         f.write(e_out[1])
 
-
-print("GPU finished, waiting on enclave")          
+if VERBOSITY >= 2:
+  print("GPU finished, waiting on enclave")          
 spc.close(force=False)        

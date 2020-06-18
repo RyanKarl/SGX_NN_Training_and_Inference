@@ -16,7 +16,6 @@
 #include <iostream>
 #include <sstream>
 #include <chrono>
-//#include <libexplain/libexplain.h>
 
 #include "../Enclave/Enclave_Defines.h"
 
@@ -119,17 +118,11 @@ int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_
   if(!ifs.good()){
     return 1;
   }
-  //cout << "Read line from " <<  csv_filename << ": ";
   char comma_holder;
   for(unsigned int i = 0; i < num_vals; i++){
-    //FLOAT_RAW_TYPE tmp;
     ifs >> vals[i] >> comma_holder;
-    //Normalize FP_TYPE value
+    //Normalize
     vals[i] /= (1 << CHAR_BIT);
-    //vals[i] = tmp;
-    //Normalize value: [0, 255] -> [0,1]
-    //vals[i] = float_to_fixed(tmp / ((1 << CHAR_BIT)-1));
-    //cout << vals[i] << ' ';
   }
   //cout << endl;
   int label_i;
@@ -151,7 +144,6 @@ int floats_to_csv(char * fname, size_t num_elts, FP_TYPE * data){
   ofstream ofs(fname);
   for(size_t i = 0; i < num_elts; i++){
     ofs << data[i];
-    //ofs << fixed_to_float(data[i]);
     if(i != num_elts-1){
       ofs << ',';
     }
@@ -222,9 +214,7 @@ int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
     if(!fs.good()){
       return 1;
     }
-    //FLOAT_RAW_TYPE tmp;
     fs >> buf[i] >> comma_holder;   
-    //buf[i] = float_to_fixed(tmp);
   }
   return 0;
 }
@@ -280,7 +270,7 @@ int finish_timing(int task){
   }
   return 0;
 }
-
+//Not technically an OCALL, but should be in this file to access stored timings
 void print_timings(std::ostream & os){
   os << "Total_duration: " << overall_duration << endl;
   for(size_t i = 0; i < forward_times.size(); i++){

@@ -10,17 +10,18 @@
 #include <math.h>
 
 #define FP_TYPE float
+#define QUANT_BITS 16
+
 #define FLOAT_RAW_TYPE float
-#define FIXED_POINT_FRACTIONAL_BITS 16
 #define SHIFT_T uint64_t
 #define USE_FIXED 0
 
-
+//Code for fixed-point representation, not currently used
 inline FLOAT_RAW_TYPE fixed_to_float(FP_TYPE x)
 {
 #if USE_FIXED
-  return ((FLOAT_RAW_TYPE)x / (FLOAT_RAW_TYPE)((SHIFT_T)1 << FIXED_POINT_FRACTIONAL_BITS));
-#else
+  return ((FLOAT_RAW_TYPE)x / (FLOAT_RAW_TYPE)((SHIFT_T)1 << QUANT_BITS));
+#else  
   return x;  
 #endif  
 }
@@ -29,8 +30,7 @@ inline FLOAT_RAW_TYPE fixed_to_float(FP_TYPE x)
 inline FP_TYPE float_to_fixed(FLOAT_RAW_TYPE input)
 {
 #if USE_FIXED
-  return (FP_TYPE)(round(input * ((SHIFT_T)1 << FIXED_POINT_FRACTIONAL_BITS)));
-    //return (FP_TYPE)(round(input * (1 << FIXED_POINT_FRACTIONAL_BITS)) / (1 << FIXED_POINT_FRACTIONAL_BITS));
+  return (FP_TYPE)(round(input * ((SHIFT_T)1 << QUANT_BITS)));
 #else
   return input;
 #endif  
