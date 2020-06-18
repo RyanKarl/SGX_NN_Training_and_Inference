@@ -187,7 +187,7 @@ class SPController:
     if not self.GPU:
       return np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)
     else:
-      return torch.tensor(np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE))
+      return torch.tensor(np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)).to("cuda:0")
 
   
   #TODO figure out return vals
