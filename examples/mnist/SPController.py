@@ -40,7 +40,10 @@ LAYER_FILE = 'weights16.txt'
 class SPController:
 
   #Initialization does not actually start subprocess
-  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False, use_std_io=False, do_backprop=DO_BACKPROP):
+  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False, use_std_io=False, do_backprop=DO_BACKPROP, GPU = True):
+    self.GPU = GPU
+    if GPU:
+      import torch
     self.pipe_names = pipe_names
     for producer, filepath in self.pipe_names.items():
       #Clear any previous file
@@ -181,7 +184,10 @@ class SPController:
     
     #Unpacks bytes into array of floats
     float_resp = np.asarray([struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)])
-    return np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)
+    if not self.GPU:
+      return np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)
+    else:
+      return torch.tensor(np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE))
 
   
   #TODO figure out return vals
