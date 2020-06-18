@@ -483,12 +483,12 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
     b_transpose, weights_height, weights_width,
     d_ret, &d_w, &d_h, 0);
   assert(*d_ret != NULL);
-
+/*
 #ifdef NENCLAVE
   cout << "last_layer_d: ";
   print_floatarr(*d_ret, 10);
 #endif  
-
+*/
 
   free(b_transpose);
   b_transpose = NULL;
@@ -546,8 +546,23 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   //diff_term eventually
   FP_TYPE * a_prod_weights_mask = (FP_TYPE *) malloc(sizeof(FP_TYPE) * weights_height * weights_width);
   assert(a_prod_weights_mask != NULL);
+
+#ifdef NENCLAVE
+  cout << "weights: ";
+  print_floatarr(weights, 10);
+  cout << endl;
+#endif  
   
   matrix_sub(weights_mask, weights, weights_height * weights_width, weight_mask_weights);
+
+/*
+#ifdef NENCLAVE
+  cout << "weight_mask_weights: ";
+  print_floatarr(weight_mask_weights, 10);
+  cout << endl;
+#endif 
+  */   
+  
 
   FP_TYPE * diff_term = NULL;
   int diff_term_w, diff_term_h;
@@ -555,6 +570,12 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
     weight_mask_weights, weights_width, weights_height,
     &diff_term, &diff_term_w, &diff_term_h);
   assert(diff_term != NULL);
+
+#ifdef NENCLAVE
+  cout << "diff_term: ";
+  print_floatarr(diff_term, 10);
+  cout << endl;
+#endif  
 
   assert(diff_term_w == a_mul_wmask_width);
   assert(diff_term_h == a_mul_wmask_height);
@@ -579,7 +600,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   assert(grad_rand_mask != NULL);
   rand_floats(grad_rand_mask, grad_output_height * grad_output_width);
 
-  
+  /*
 #ifdef NENCLAVE
   if(verbose >= 2){
     cout << "grad_rand_mask: ";
@@ -593,14 +614,15 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   print_floatarr(grad_output, 10);
   cout << endl;
 #endif   
-
+*/
   mask(grad_output, grad_rand_mask, grad_output_width * grad_output_height, grad_output, false);
-
+/*
 #ifdef NENCLAVE
   cout << "grad_output (after mask): ";
   print_floatarr(grad_output, 10);
   cout << endl;
 #endif 
+*/
 
   assert(outputs_width == grad_output_width);
   assert(outputs_height == grad_output_height);
@@ -608,8 +630,6 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   FP_TYPE * c_transformed = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height * grad_output_width);
   assert(c_transformed != NULL);
   transform_and_mult(grad_output, outputs, diff_term, c_transformed, grad_output_height * grad_output_width);
-
-
 
   FP_TYPE * weightmask_b = (FP_TYPE *) malloc(sizeof(FP_TYPE) * weights_height * weights_width);
   assert(weightmask_b != NULL);
@@ -683,12 +703,13 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   assert(d_w == diffc_diffa_w);
   assert(d_h == diffc_diffa_h);
 
+/*
 #ifdef NENCLAVE
   cout << "d_from_gpu: ";
   print_floatarr(d, 10);
   cout << endl;
 #endif   
-  
+  */
   //Verify
   if(verify_frievald(c_transformed, weights_transpose, d,
       grad_output_width, grad_output_height, 
@@ -725,21 +746,24 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
 
   FP_TYPE * diffx = NULL;
   int diffx_w, diffx_h;
-
+/*
 #ifdef NENCLAVE
   cout << "c_transformed: ";
   print_floatarr(c_transformed, 10);
   cout << endl;
 #endif 
+*/
 
   FP_TYPE * c_transpose = transpose(c_transformed, grad_output_width, grad_output_height);
   assert(c_transpose != NULL);
 
+/*
 #ifdef NENCLAVE
   cout << "c_transpose: ";
   print_floatarr(c_transpose, 10);
   cout << endl;
 #endif 
+*/
 
   matrix_multiply(c_transpose, grad_output_height, grad_output_width,
     input_mask, input_width, input_height,
@@ -812,7 +836,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   
   
   assert(grad_output_height == input_height);
-
+/*
 #ifdef NENCLAVE
   cout << "diffz_diffy: ";
   print_floatarr(diffz_diffy, 10);
@@ -824,7 +848,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   print_floatarr(diffx, 10);
   cout << endl;
 #endif 
-
+*/
   matrix_sub(diffz_diffy, diffx, e_w*e_h, diffz_diffy);
 
 
@@ -857,8 +881,6 @@ void forward_demask(const FP_TYPE * input_masked, const int input_width, const i
   FP_TYPE ** result, int * result_width, int * result_height){
 
   assert(input_width == weights_height);
-
-  //int w_dummy, h_dummy;
 
   //Calculate diff3 - diff
   //First, find weights_masks - input_masks
@@ -895,8 +917,6 @@ void forward_demask(const FP_TYPE * input_masked, const int input_width, const i
     diff3_diff[i] = tanh(gpu_output[i] + diff3_diff[i]) + input_masks[i];
   }
 
-
-
   free(weights_unmasked_neg);
   weights_unmasked_neg = NULL;
   free(unmasked_inputs);
@@ -911,6 +931,8 @@ void forward_demask(const FP_TYPE * input_masked, const int input_width, const i
 
 
   /*
+
+  //int w_dummy, h_dummy;
 
   FP_TYPE * d3_d = NULL;
   matrix_multiply(input_masks, input_width, input_height,
@@ -1218,11 +1240,13 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       }
 #endif     
 
+      /*
 #ifdef NENCLAVE
         cout << "gpu_outputs: ";
         print_floatarr(gpu_outputs[layer_idx], 10);
         cout << endl;
 #endif           
+    */
 
       //Validate result with Frievalds' algorithm
       //If it fails, send {-1, -1} back to the GPU and exit

@@ -204,11 +204,13 @@ void transform_and_mult(const FP_TYPE * y, const FP_TYPE * g, const FP_TYPE * te
   for(int i = 0; i < total_elts; i++){
     FP_TYPE tmp = tanh(g[i] + term[i]);
     ret[i] = y[i] * (1.0f - (tmp*tmp));
+    
 #ifdef NENCLAVE
     if(i <= 5){
       cout << "g: " << g[i] << " term " << term[i] << ' ';
     }
 #endif    
+
   }
   cout << endl;
   return;
