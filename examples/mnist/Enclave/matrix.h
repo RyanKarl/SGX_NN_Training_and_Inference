@@ -194,12 +194,23 @@ FP_TYPE * transform(const FP_TYPE * y, const FP_TYPE * term, const int total_elt
   return ret;
 }
 
+#include <iostream>
+using std::cout;
+using std::endl;
+
 void transform_and_mult(const FP_TYPE * y, const FP_TYPE * g, const FP_TYPE * term, FP_TYPE * ret, const int total_elts){
   assert(ret != NULL);
+  cout << "transform_and_mult: ";
   for(int i = 0; i < total_elts; i++){
     FP_TYPE tmp = tanh(g[i] + term[i]);
     ret[i] = y[i] * (1.0f - (tmp*tmp));
+#ifdef NENCLAVE
+    if(i <= 5){
+      cout << "g: " << g[i] << " term " << term[i] << ' ';
+    }
+#endif    
   }
+  cout << endl;
   return;
 }
 

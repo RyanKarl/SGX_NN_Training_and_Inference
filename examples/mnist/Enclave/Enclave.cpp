@@ -62,7 +62,11 @@ void rand_floats(FP_TYPE * buf, size_t num_floats, unsigned int second_scale=1){
     assert(buf[i] < (1.0f));
     assert(!isnan(buf[i]));
     */
-    buf[i] = 0.0f;
+    
+    buf[i] = (FP_TYPE)tmp_buf[i]/(FP_TYPE)UINT_MAX;
+    buf[i] /= (FP_TYPE)second_scale;
+    
+    //buf[i] = 0;
   }
   free(tmp_buf);
   tmp_buf = NULL;
@@ -95,7 +99,7 @@ void print_floatarr(const FP_TYPE * data, int size){
 int frievald(const FP_TYPE * a, const FP_TYPE * b, const FP_TYPE * c, 
   const int a_width, const int a_height, 
   const int b_width, const int b_height,  
-   const int c_width, const int c_height)
+  const int c_width, const int c_height)
 {
   //Mult. is defined
   assert(a_width == b_height);
@@ -480,6 +484,11 @@ void backwards_demask_lastlayer(const FP_TYPE * input, const int input_width, co
     d_ret, &d_w, &d_h, 0);
   assert(*d_ret != NULL);
 
+#ifdef NENCLAVE
+  cout << "last_layer_d: ";
+  print_floatarr(*d_ret, 10);
+#endif  
+
 
   free(b_transpose);
   b_transpose = NULL;
@@ -547,6 +556,9 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
     &diff_term, &diff_term_w, &diff_term_h);
   assert(diff_term != NULL);
 
+  assert(diff_term_w == a_mul_wmask_width);
+  assert(diff_term_h == a_mul_wmask_height);
+
   matrix_sub(diff_term, a_mul_wmask, diff_term_w*diff_term_h, diff_term);
 
   free(weight_mask_weights);
@@ -563,15 +575,41 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   a_mul_wmask = NULL;
 
   //Mask the grad. output being sent to the GPU
-  FP_TYPE * grad_rand_mask = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height * outputs_width);
+  FP_TYPE * grad_rand_mask = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height * grad_output_width);
   assert(grad_rand_mask != NULL);
-  rand_floats(grad_rand_mask, grad_output_height * outputs_width);
+  rand_floats(grad_rand_mask, grad_output_height * grad_output_width);
+
+  
+#ifdef NENCLAVE
+  if(verbose >= 2){
+    cout << "grad_rand_mask: ";
+    print_floatarr(grad_rand_mask, 5);
+  }
+#endif  
+  
+
+#ifdef NENCLAVE
+  cout << "grad_output (before mask): ";
+  print_floatarr(grad_output, 10);
+  cout << endl;
+#endif   
+
   mask(grad_output, grad_rand_mask, grad_output_width * grad_output_height, grad_output, false);
 
+#ifdef NENCLAVE
+  cout << "grad_output (after mask): ";
+  print_floatarr(grad_output, 10);
+  cout << endl;
+#endif 
 
-  FP_TYPE * c_transformed = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height * outputs_width);
+  assert(outputs_width == grad_output_width);
+  assert(outputs_height == grad_output_height);
+
+  FP_TYPE * c_transformed = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height * grad_output_width);
   assert(c_transformed != NULL);
-  transform_and_mult(grad_output, outputs, diff_term, c_transformed, grad_output_height * outputs_width);
+  transform_and_mult(grad_output, outputs, diff_term, c_transformed, grad_output_height * grad_output_width);
+
+
 
   FP_TYPE * weightmask_b = (FP_TYPE *) malloc(sizeof(FP_TYPE) * weights_height * weights_width);
   assert(weightmask_b != NULL);
@@ -588,16 +626,25 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   int diffc_diffa_w, diffc_diffa_h;  
 
   //Apply transform to grad_rand_mask
-  //transform(grad_rand_mask, diff_term, grad_output_height*grad_output_width, grad_rand_mask);
+  //PROBLEMATIC LINE HERE
+  transform(grad_rand_mask, diff_term, grad_output_height*grad_output_width, grad_rand_mask);
   //FP_TYPE * res = transform(grad_rand_mask, diff_term, grad_output_height*grad_output_width);
   //free(res);
   //res = NULL;
 
+  /*
+#ifdef NENCLAVE
+  if(verbose >= 2){
+    cout << "grad_rand_mask: ";
+    print_floatarr(grad_rand_mask, 5);
+  }
+#endif  
+  */
 
   free(diff_term);
   diff_term = NULL;
 
-  matrix_multiply(grad_rand_mask, outputs_width, grad_output_height, 
+  matrix_multiply(grad_rand_mask, grad_output_width, grad_output_height, 
    wrm_b_t, weights_height, weights_width,
    &diffc_diffa, &diffc_diffa_w, &diffc_diffa_h);
   assert(diffc_diffa != NULL);
@@ -631,6 +678,16 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
     return 1;
   }
   assert(d != NULL);
+  assert(d_w == diffb_w);
+  assert(d_h == diffb_h);
+  assert(d_w == diffc_diffa_w);
+  assert(d_h == diffc_diffa_h);
+
+#ifdef NENCLAVE
+  cout << "d_from_gpu: ";
+  print_floatarr(d, 10);
+  cout << endl;
+#endif   
   
   //Verify
   if(verify_frievald(c_transformed, weights_transpose, d,
@@ -644,11 +701,11 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   free(weights_transpose);
   weights_transpose = NULL; 
   
-  FP_TYPE * difftemp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * grad_output_height*weights_width);
+  FP_TYPE * difftemp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * d_w*d_h);
   assert(difftemp != NULL);
   
-  matrix_sub(diffc_diffa, diffb, grad_output_height*weights_width, difftemp);
-
+  matrix_sub(diffc_diffa, diffb, d_h*d_w, difftemp);
+  matrix_add(d, difftemp, d_h*d_w, d);
   /*
   for(int i = 0; i < grad_output_height*weights_width; i++){
     d[i] += diffc_diffa[i] - diffb[i];
@@ -661,7 +718,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   free(diffb);
   diffb = NULL;
   
-  matrix_add(d, difftemp, grad_output_height*weights_width, d);
+  
 
   free(difftemp);
   difftemp = NULL;
@@ -669,17 +726,29 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   FP_TYPE * diffx = NULL;
   int diffx_w, diffx_h;
 
-  FP_TYPE * c_transpose = transpose(c_transformed, outputs_width, outputs_height);
+#ifdef NENCLAVE
+  cout << "c_transformed: ";
+  print_floatarr(c_transformed, 10);
+  cout << endl;
+#endif 
+
+  FP_TYPE * c_transpose = transpose(c_transformed, grad_output_width, grad_output_height);
   assert(c_transpose != NULL);
 
-  matrix_multiply(c_transpose, outputs_height, outputs_width,
+#ifdef NENCLAVE
+  cout << "c_transpose: ";
+  print_floatarr(c_transpose, 10);
+  cout << endl;
+#endif 
+
+  matrix_multiply(c_transpose, grad_output_height, grad_output_width,
     input_mask, input_width, input_height,
     &diffx, &diffx_w, &diffx_h);
   assert(diffx != NULL);
 
   
 
-  FP_TYPE * grm_transposed = transpose(grad_rand_mask, grad_output_width, outputs_height);
+  FP_TYPE * grm_transposed = transpose(grad_rand_mask, grad_output_width, grad_output_height);
   assert(grm_transposed != NULL);
 
   free(grad_rand_mask);
@@ -694,7 +763,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
 
   FP_TYPE * diffz_diffy = NULL;
   int diffz_diffy_w, diffz_diffy_h;
-  matrix_multiply(grm_transposed, grad_output_height, outputs_width, 
+  matrix_multiply(grm_transposed, grad_output_height, grad_output_width, 
     rand_mask_a, input_width, input_height, //Reversed due to transposition
      &diffz_diffy, &diffz_diffy_w, &diffz_diffy_h);
   assert(diffz_diffy != NULL);
@@ -732,6 +801,9 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   assert(e_w == weights_height);
   assert(e_h == weights_width);
 
+  assert(e_w == diffz_diffy_w);
+  assert(e_h == diffz_diffy_h);
+
   /*
   for(int i = 0; i < input_height*input_width; i++){
     e[i] += diffz_diffy - diffx;
@@ -739,9 +811,25 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   */
   
   
-  
-  matrix_sub(diffz_diffy, diffx, grad_output_height*input_width, diffz_diffy);
-  matrix_add(e, diffz_diffy, input_height*input_width, e);
+  assert(grad_output_height == input_height);
+
+#ifdef NENCLAVE
+  cout << "diffz_diffy: ";
+  print_floatarr(diffz_diffy, 10);
+  cout << endl;
+#endif 
+
+#ifdef NENCLAVE
+  cout << "diffx: ";
+  print_floatarr(diffx, 10);
+  cout << endl;
+#endif 
+
+  matrix_sub(diffz_diffy, diffx, e_w*e_h, diffz_diffy);
+
+
+
+  matrix_add(e, diffz_diffy, e_w*e_h, e);
   
 
   //Transpose error
@@ -761,22 +849,76 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   return 0;
 }
 
-void forward_demask(const FP_TYPE * input, const int input_width, const int input_height,
+void forward_demask(const FP_TYPE * input_masked, const int input_width, const int input_height,
   const FP_TYPE * input_masks, 
-  const FP_TYPE * weights_unmasked, const int weights_width, const int weights_height,
+  const FP_TYPE * weights_masked, const int weights_width, const int weights_height,
   const FP_TYPE * weights_masks,
   const FP_TYPE * gpu_output,
   FP_TYPE ** result, int * result_width, int * result_height){
 
   assert(input_width == weights_height);
 
-  int w_dummy, h_dummy;
+  //int w_dummy, h_dummy;
+
+  //Calculate diff3 - diff
+  //First, find weights_masks - input_masks
+
+  FP_TYPE * weights_unmasked_neg = (FP_TYPE *) malloc(sizeof(FP_TYPE)*weights_width*weights_height);
+  assert(weights_unmasked_neg != NULL);
+  matrix_sub(weights_masks, weights_masked, weights_width*weights_height, weights_unmasked_neg);
+
+
+  FP_TYPE * unmasked_inputs = (FP_TYPE *) malloc(sizeof(FP_TYPE)*input_width*input_height);
+  assert(unmasked_inputs != NULL);
+  matrix_sub(input_masked, input_masks, input_width*input_height, unmasked_inputs);
+
+  FP_TYPE * diff2 = NULL;
+  int diff2_w, diff2_h;
+  matrix_multiply(unmasked_inputs, input_width, input_height,
+    weights_masks, weights_width, weights_height,
+    &diff2, &diff2_w, &diff2_h);
+  assert(diff2 != NULL);
+
+  FP_TYPE * diff3_diff = NULL;
+  int diff3_diff_w, diff3_diff_h;
+  matrix_multiply(input_masks, input_width, input_height,
+    weights_unmasked_neg, weights_width, weights_height,
+    &diff3_diff, &diff3_diff_w, &diff3_diff_h);
+  assert(diff3_diff != NULL);
+
+  assert(diff3_diff_w == diff2_w);
+  assert(diff3_diff_h == diff2_h);
+
+  matrix_sub(diff3_diff, diff2, diff3_diff_w*diff3_diff_h, diff3_diff);
+
+  for(int i = 0; i < diff3_diff_w*diff3_diff_h; i++){
+    diff3_diff[i] = tanh(gpu_output[i] + diff3_diff[i]) + input_masks[i];
+  }
+
+
+
+  free(weights_unmasked_neg);
+  weights_unmasked_neg = NULL;
+  free(unmasked_inputs);
+  unmasked_inputs = NULL;
+  free(diff2);
+  diff2 = NULL;
+
+  *result = diff3_diff;
+  *result_width = diff3_diff_w;
+  *result_height = diff3_diff_h;
+  return;
+
+
+  /*
 
   FP_TYPE * d3_d = NULL;
   matrix_multiply(input_masks, input_width, input_height,
    weights_unmasked, weights_width, weights_height,
    &d3_d, &w_dummy, &h_dummy, 1);
   assert(d3_d != NULL);
+
+  
 
   //diff2 goes in result
   matrix_multiply(input, input_width, input_height,
@@ -786,8 +928,16 @@ void forward_demask(const FP_TYPE * input, const int input_width, const int inpu
   
   matrix_sub(d3_d, *result, (*result_width)*(*result_height), *result);
 
+#ifdef NENCLAVE
+  cout << "d3_d: ";
+  print_floatarr(*result, 10);
+  cout << endl;
+#endif  
+
   free(d3_d);
   d3_d = NULL;
+
+  */
 
 }
 
@@ -815,9 +965,11 @@ FP_TYPE * crossentropy_derivative(const unsigned int * actual, const FP_TYPE * p
 
 
 void update_weights(FP_TYPE * weights, const FP_TYPE * weights_gradient, const int total_elts, const FP_TYPE learning_rate){
+  //cout << "weights_gradient: ";
   for(int i = 0; i < total_elts; i++){
     weights[i] -= learning_rate*weights_gradient[i];
   }
+  //cout << endl;
   return;
 }
 
@@ -835,7 +987,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
   unsigned int num_pixels = 0;
   unsigned int num_possible_labels = 0;
   unsigned int num_epochs = 1;
-  bool skip_masking = true; 
+  bool skip_masking = false; 
   string weights_out_str = "";
   if(weights_outfile != NULL){
     weights_out_str = weights_outfile;
@@ -1034,15 +1186,11 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       //Mask weights
       weights_mask[layer_idx] = (FP_TYPE *) malloc(sizeof(FP_TYPE) * num_weights);
       assert(weights_mask[layer_idx] != NULL);
-      rand_floats(weights_mask[layer_idx], num_weights, WEIGHTS_SCALE);
+      rand_floats(weights_mask[layer_idx], num_weights);
       //Cast should be explicit, for the non-SGX version
-
-      //Quantize weights before masking
-      round_floatmat(layer_data[layer_idx], num_weights);
 
       if(!skip_masking){
         mask(layer_data[layer_idx], weights_mask[layer_idx], num_weights, layer_data[layer_idx], false);
-        
       }
       if(verbose >= 2){
         print_out((char *) &("Finished masking weights"[0]), false);
@@ -1069,6 +1217,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         cout << "GPU result: " << num_result_neurons << ' ' << result_batchsize << endl;
       }
 #endif     
+
+#ifdef NENCLAVE
+        cout << "gpu_outputs: ";
+        print_floatarr(gpu_outputs[layer_idx], 10);
+        cout << endl;
+#endif           
 
       //Validate result with Frievalds' algorithm
       //If it fails, send {-1, -1} back to the GPU and exit
@@ -1097,7 +1251,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       
       int gpu_unmasked_w, gpu_unmasked_h;
       if(!skip_masking){
-        //Unmask weights NVM
+        //Unmask weights
         //mask(layer_data[layer_idx], weights_mask[layer_idx], num_neurons, layer_data[layer_idx], true);
 
         forward_demask(gpu_inputs[layer_idx], num_neurons, num_images_this_batch,
@@ -1106,6 +1260,8 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           weights_mask[layer_idx], 
           gpu_outputs[layer_idx],
           &gpu_unmasked_result, &gpu_unmasked_w, &gpu_unmasked_h);
+
+
         
       }
       else{
@@ -1196,6 +1352,14 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
           assert(d_ret != NULL);
           assert(e_ret != NULL);
+          /*
+#ifdef NENCLAVE
+          if(verbose >= 2){
+            cout << "first_layer_d: ";
+            print_floatarr(d_ret, 10);
+          }
+#endif      
+  */    
 
           free(gpu_unmasked_result);
           gpu_unmasked_result = NULL;
@@ -1243,12 +1407,17 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
           derivative = d_ret;
           d_ret = NULL;
 
+
+
           //Update weights with e_ret - first unmask
           mask(layer_data[rev_layer_idx], weights_mask[rev_layer_idx], 
             num_neurons*layer_files[rev_layer_idx].neurons, layer_data[rev_layer_idx], true);
+
+          //e_ret too large
+     
+
           update_weights(layer_data[rev_layer_idx], e_ret, 
             num_neurons*layer_files[rev_layer_idx].neurons, LEARNING_RATE);
-
 
           free(e_ret);
           e_ret = NULL;
