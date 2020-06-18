@@ -691,16 +691,16 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   free(weights_transpose);
   weights_transpose = NULL; 
   
-  FP_TYPE * difftemp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * d_w*d_h);
-  assert(difftemp != NULL);
+  //FP_TYPE * difftemp = (FP_TYPE *) malloc(sizeof(FP_TYPE) * d_w*d_h);
+  //assert(difftemp != NULL);
   
-  matrix_sub(diffc_diffa, diffb, d_h*d_w, difftemp);
-  matrix_add(d, difftemp, d_h*d_w, d);
-  /*
+  //matrix_sub(diffc_diffa, diffb, d_h*d_w, difftemp);
+  //matrix_add(d, difftemp, d_h*d_w, d);
+  
   for(int i = 0; i < grad_output_height*weights_width; i++){
     d[i] += diffc_diffa[i] - diffb[i];
   }
-  */
+  
   
 
   free(diffc_diffa);
@@ -710,8 +710,8 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   
   
 
-  free(difftemp);
-  difftemp = NULL;
+  //free(difftemp);
+  //difftemp = NULL;
 
   FP_TYPE * diffx = NULL;
   int diffx_w, diffx_h;
@@ -753,7 +753,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
 
   FP_TYPE * rand_mask_a = (FP_TYPE *) malloc(sizeof(FP_TYPE) * input_height*input_width);
   assert(rand_mask_a != NULL);
-  //matrix_sub
+
   matrix_sub(input_mask, input, input_height*input_width, rand_mask_a);
 
 
@@ -799,11 +799,14 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   assert(e_w == diffz_diffy_w);
   assert(e_h == diffz_diffy_h);
 
-  /*
-  for(int i = 0; i < input_height*input_width; i++){
-    e[i] += diffz_diffy - diffx;
+  assert(diffx_w == e_w);
+  assert(diffx_h == e_h);
+
+  
+  for(int i = 0; i < e_w*e_h; i++){
+    e[i] += diffz_diffy[i] - diffx[i];
   }
-  */
+  
   
   
   assert(grad_output_height == input_height);
@@ -820,8 +823,8 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   cout << endl;
 #endif 
 */
-  matrix_sub(diffz_diffy, diffx, e_w*e_h, diffz_diffy);
-  matrix_add(e, diffz_diffy, e_w*e_h, e);
+//matrix_sub(diffz_diffy, diffx, e_w*e_h, diffz_diffy);
+//matrix_add(e, diffz_diffy, e_w*e_h, e);
   
 
   //Transpose error
@@ -851,6 +854,7 @@ int backwards_demask_ordinary(const FP_TYPE * input, const int input_width, cons
   return 0;
 }
 
+//TODO play with unmasking weights for this
 void forward_demask(const FP_TYPE * input_masked, const int input_width, const int input_height,
   const FP_TYPE * input_masks, 
   const FP_TYPE * weights_masked, const int weights_width, const int weights_height,
@@ -896,11 +900,11 @@ void forward_demask(const FP_TYPE * input_masked, const int input_width, const i
   assert(diff3_diff_w == diff2_w);
   assert(diff3_diff_h == diff2_h);
 
-  matrix_sub(diff3_diff, diff2, diff3_diff_w*diff3_diff_h, diff3_diff);
+  //matrix_sub(diff3_diff, diff2, diff3_diff_w*diff3_diff_h, diff3_diff);
 
   for(int i = 0; i < diff3_diff_w*diff3_diff_h; i++){
     //diff3_diff[i] = tanh(gpu_output[i] + diff3_diff[i]) + input_masks[i];
-    diff3_diff[i] = gpu_output[i] + diff3_diff[i];
+    diff3_diff[i] = gpu_output[i] + diff3_diff[i] - diff2[i];
   }
 
   free(weights_unmasked_neg);

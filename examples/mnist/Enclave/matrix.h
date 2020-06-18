@@ -207,7 +207,7 @@ void transform_and_mult(const FP_TYPE * y, const FP_TYPE * g, const FP_TYPE * te
     
 #ifdef NENCLAVE
     if(i <= 5){
-      cout << "g: " << g[i] << " term " << term[i] << ' ';
+      cout << "g+term: " << g[i]+term[i] << ' ';
     }
 #endif    
 
