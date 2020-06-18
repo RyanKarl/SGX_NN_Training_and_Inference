@@ -9,8 +9,10 @@ import struct
 import numpy as np
 from subprocess import PIPE
 
+USER = os.environ.get('USER')
 ENCLAVE_EXE_PATH = "./app"
-TMPDIR = "/tmp/"
+TMPDIR = "/tmp/." + USER + '_'
+#TMPDIR = os.path.abspath(TMPDIR)
 #Name is of the writer
 FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
 INT_BYTES = 4
@@ -47,6 +49,7 @@ class SPController:
       #Clear any previous file
       try:
         #os.mkfifo is system call to create pipe
+        #print("FILEPATH: " + filepath)
         os.mkfifo(filepath)
       except FileExistsError as e:
         os.unlink(filepath)

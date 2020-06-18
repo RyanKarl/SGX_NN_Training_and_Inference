@@ -233,7 +233,7 @@ int main(int argc, char ** argv){
 #endif
 
   //Temporary method of randomness
-#define SEED 5
+#define SEED 10
   srand(SEED);
 
   //i and o are filenames of named pipe

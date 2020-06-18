@@ -252,56 +252,67 @@ def transform_and_mult(y, g, term):
     return tmp
 
 def SGXB(grad_output, input, weight, output):
-    
     rand_mask = super_mega_mask[0:input.shape[0], 0:input.shape[1]]
     weight_rand_mask = super_mega_mask[0:weight.shape[0], 0:weight.shape[1]]
     grad_rand_mask = super_mega_mask[0:grad_output.shape[0], 0:grad_output.shape[1]]
-
+    output_mask = super_mega_mask[0:output.shape[0], 0:output.shape[1]]
     a = input 
     b = weight 
     c = grad_output.clone()
     g = output.clone()
-
-    #diff = rand_mask @ b.t()
-    #diff2 = a @ weight_rand_mask.t()
-    #diff3 = rand_mask @ weight_rand_mask.t()
-    #diff_term = diff3 - diff2 - diff1
+    c = c #- grad_rand_mask
+    g = a @ b.t()
+    # diff = rand_mask @ b.t()
+    #128, 500
+    # diff2 = a @ weight_rand_mask.t()
+    # diff3 = rand_mask @ weight_rand_mask.t()
+    # diff = rand_mask @ b.t()
+    # diff2 = a @ weight_rand_mask.t()
+    # diff3 = rand_mask @ weight_rand_mask.t()
+    # diff_term = diff3 - diff2 - diff1
     a_mul_wmask = (a @ weight_rand_mask.t())
     weight_mask_weights = (weight_rand_mask - b).t() #Don't transpose this'
     diff_term = (rand_mask @ weight_mask_weights)
     diff_term -= a_mul_wmask 
     #c = c * (1-torch.tanh(g + diff_term)**2)
+    #diff_term = 0
+    #print(g-diff_term)
+    # diff_term = -diff - diff2 + diff3
+    # print(g - diff - diff2 + diff3)
+    #input_()
     c_transformed = transform_and_mult(c, g, diff_term)
-   
+    # print(c_transformed)
+    # input_()
     #Send(c matrix to GPU)
     #Receive(d = c @ b)
+    c_transformed += grad_rand_mask #
     d = c_transformed @ b
-
-    grad_rand_mask = transform(grad_rand_mask, diff_term)
+    # print(d)
+    # grad_rand_mask = transform(grad_rand_mask - diff - diff2 + diff3, 0)
     weightrandmask_b = (weight_rand_mask - b) #Transpose this
     diffc_diffa = grad_rand_mask @ weightrandmask_b
-    #diffa = (1-torch.tanh(grad_rand_mask + diff_term)**2) @ b
+    # diffa = grad_rand_mask @ b
     diffb = c_transformed @ weight_rand_mask
-    #diffc = (1-torch.tanh(grad_rand_mask + diff_term)**2) @ weight_rand_mask
-    
-    diffc_diffa =- diffb
+    # diffc = grad_rand_mask @ weight_rand_mask
+    # print(d - diffa - diffb + diffc)
+    # input_()
+    diffc_diffa -= diffb
     d += diffc_diffa
     #ct = grad_output.clone() - grad_rand_mask
     #transform(ct, g, diff_term)
     #ct = ct * (1-torch.tanh(g + diff_term)**2)
-    
     #Receive(e = c.t() @ a)
     e = c_transformed.t() @ a
     #print(e)
     diffx = c_transformed.t() @ rand_mask
-    #diffy = grm_transformed.t() @ a 
-    #diffz = grm_transformed.t() @ rand_mask
+    # diffy = grad_rand_mask.t() @ a 
+    # diffz = grad_rand_mask.t() @ rand_mask
     rm_a = (rand_mask - a)
     diffz_diffy = grad_rand_mask.t() @ rm_a
     diffz_diffy -= diffx
-    e += diffz_diffy 
-
-    return d + super_mega_mask[0:d.shape[0], 0:d.shape[1]], e + weight_rand_mask 
+    e += diffz_diffy
+    # print()
+    return d, e + weight_rand_mask 
 
 class MyFunction2(Function):
     # Note that both forward and backward are @staticmethods
