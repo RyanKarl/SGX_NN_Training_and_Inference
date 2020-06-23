@@ -1,2 +1,0 @@
-DeliveryName	InstallName	FileCheckSum	FileFeature	FileOwner
-<deliverydir>/build/linux/bundles/libpce_service_bundle.so	<installdir>/aesm/bundles/libpce_service_bundle.so	0	main	STP
