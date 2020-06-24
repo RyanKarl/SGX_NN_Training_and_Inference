@@ -298,7 +298,7 @@ int send_to_gpu(const FP_TYPE * data, const int batchsize, const int num_neurons
   int written = write_stream((void *) out_dims, sizeof(out_dims));
   if(written){
     print_out((char *) &("Failed writing matrix dimensions"[0]), true);
-    cout << written << " bytes sent" << endl;        
+    std::cerr << written << " bytes sent" << endl;        
     return 1;
   }
 #else
@@ -1021,7 +1021,7 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 #endif     
 
       //Validate result with Frievalds' algorithm
-      //If it fails, send {-1, -1} back to the GPU and exit
+      //If it fails, print an error message and continue
       if(verify_frievald(gpu_inputs[layer_idx], layer_data[layer_idx], gpu_outputs[layer_idx], 
           num_neurons, num_images_this_batch,
           layer_files[layer_idx].neurons, num_neurons,
@@ -1047,18 +1047,12 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
       
       int gpu_unmasked_w, gpu_unmasked_h;
       if(!skip_masking){
-        //Unmask weights
-        //mask(layer_data[layer_idx], weights_mask[layer_idx], num_neurons, layer_data[layer_idx], true);
-
         forward_demask(gpu_inputs[layer_idx], num_neurons, num_images_this_batch,
           input_masks[layer_idx], 
           layer_data[layer_idx], layer_files[layer_idx].neurons, num_neurons,
           weights_mask[layer_idx], 
           gpu_outputs[layer_idx],
           &gpu_unmasked_result, &gpu_unmasked_w, &gpu_unmasked_h);
-
-
-        
       }
       else{
          gpu_unmasked_result = (FP_TYPE *) malloc(sizeof(FP_TYPE)*result_batchsize*layer_files[layer_idx].neurons);
@@ -1078,7 +1072,6 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
         assert(gpu_unmasked_w == (int) num_possible_labels);
         softmax(gpu_unmasked_result, gpu_unmasked_w, gpu_unmasked_h);         
       }
-      
       //Also, don't deallocate weights either, also needed in backprop
 
     } //layer_idx (forward pass)

@@ -19,7 +19,7 @@ void matrix_sub(const FP_TYPE * a, const FP_TYPE * b, int elts, FP_TYPE * result
   }
 }
 
-//Allocates memory
+//Allocates memory by default - very naive implementation
 void matrix_multiply(const FP_TYPE * a, const int a_width, const int a_height,
     const FP_TYPE * b, const int b_width, const int b_height, 
     FP_TYPE ** c, int * c_width, int * c_height, const int negate=0, const int alloc_new=1){
@@ -86,8 +86,6 @@ int activate_derivative(FP_TYPE * data, int total_elts){
   return 0;
 }
 
-
-
 FP_TYPE * transpose(const FP_TYPE * x, const int width, const int height){
   FP_TYPE * ret = (FP_TYPE *) malloc(sizeof(FP_TYPE) * width * height);
   assert(ret != NULL);
@@ -99,59 +97,47 @@ FP_TYPE * transpose(const FP_TYPE * x, const int width, const int height){
   return ret;
 }
 
-#include <iostream>
-//using std::cout;
-//using std::endl;
-
-//TODO rewrite to cut down on the loops
 //https://stats.stackexchange.com/questions/338285/how-does-the-subtraction-of-the-logit-maximum-improve-learning
 #define FP_LARGE_T double
 void softmax(FP_TYPE * x, const int width, const int height){
-
   assert(x != NULL);
-
-  //cout << "Original:" << endl;
-
   //Max. elt. of a row
   FP_TYPE * max_elts = (FP_TYPE *) malloc(sizeof(FP_TYPE)*height);
   assert(max_elts != NULL);
   for(int i = 0; i < height; i++){
     for(int j = 0; j < width; j++){
       max_elts[i] = !j ? x[(i*width)] : std::max(x[(i*width)+j], max_elts[i]);
-      //cout << x[(i*width)+j] << ' ';
     }
-    //cout << endl;
   }
-  //print_floatmat(max_elts, 1, height);
   //Subtract the max. from each element of the rows
   for(int i = 0; i < height; i++){
     for(int j = 0; j < width; j++){
       x[(i*width)+j] -= max_elts[i];
     }
   }
-  //print_floatmat(x, width, height);
+
   free(max_elts);
   max_elts = NULL;
+
   FP_TYPE * sums = (FP_TYPE *) calloc(height, sizeof(FP_TYPE));
   assert(sums != NULL);
+
   //Exponentiate, get sums of rows
   for(int i = 0; i < height; i++){
     for(int j = 0; j < width; j++){
       sums[i] += (x[(i*width)+j] = exp(x[(i*width)+j]));
     }
   }
-  //print_floatmat(x, width, height);
-  //print_floatmat(sums, 1, height);
   //Divide
   for(int i = 0; i < height; i++){
     for(int j = 0; j < width; j++){
       x[(i*width)+j] /= sums[i];
-      //std::cout << x[(i*width)+j] << ' ';    
     }
-    //std::cout << std::endl;
   }
+
   free(sums);
   sums = NULL;
+
   return;
 }
 
@@ -194,25 +180,12 @@ FP_TYPE * transform(const FP_TYPE * y, const FP_TYPE * term, const int total_elt
   return ret;
 }
 
-#include <iostream>
-using std::cout;
-using std::endl;
-
 void transform_and_mult(const FP_TYPE * y, const FP_TYPE * g, const FP_TYPE * term, FP_TYPE * ret, const int total_elts){
   assert(ret != NULL);
-  cout << "transform_and_mult: ";
   for(int i = 0; i < total_elts; i++){
     FP_TYPE tmp = tanh(g[i] + term[i]);
-    ret[i] = y[i] * (1.0f - (tmp*tmp));
-    
-#ifdef NENCLAVE
-    if(i <= 5){
-      cout << "g+term: " << g[i]+term[i] << ' ';
-    }
-#endif    
-
+    ret[i] = y[i] * (1.0f - (tmp*tmp)); 
   }
-  cout << endl;
   return;
 }
 
@@ -247,7 +220,7 @@ int bounds_check(const FP_TYPE * data, const int num_elts, const FP_TYPE min, co
   return 0;
 }
 
-const static uint64_t step_d = ((uint64_t) 1) << (FIXED_POINT_FRACTIONAL_BITS - 1);
+const static uint64_t step_d = ((uint64_t) 1) << (QUANT_BITS - 1);
 
 FP_TYPE round_float(const FP_TYPE & dat){
   return round(dat*step_d)/step_d;
