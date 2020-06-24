@@ -77,6 +77,9 @@ class SPController:
     #No buffering to force immediate writes
     if not self.use_std_io:
       self.proc = subprocess.Popen(self.args)  
+      if self.proc.poll() is not None:
+        print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
+        sys.exit(self.proc.poll())
       self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=BUFFERING)
       self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=BUFFERING)
       if self.debug:
