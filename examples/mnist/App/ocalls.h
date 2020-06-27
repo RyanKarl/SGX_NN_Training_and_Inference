@@ -196,7 +196,7 @@ int read_weight_file(char * filename, size_t buf_size, FP_TYPE * buf){
     return 1;
   }
   long bytes_read = fread(buf, sizeof(FP_TYPE), buf_size/sizeof(FP_TYPE), f);
-  if(bytes_read*sizeof(FP_TYPE) != (long) buf_size){
+  if((unsigned long) bytes_read*sizeof(FP_TYPE) != (unsigned long) buf_size){
     fclose(f);
     return 1;
   }

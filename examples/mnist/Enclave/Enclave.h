@@ -41,11 +41,11 @@ int init_streams(char * inpipe_fname, char * outpipe_fname);
 int read_stream(void * buf, size_t total_bytes);
 int write_stream(void * buf, size_t total_bytes);
 int close_streams();
-int csv_getline(char * input_csv_name, FP_TYPE * vals, unsigned int * label, size_t num_vals, int reset);
+int csv_getline(char * input_csv_name, FP_TYPE * vals, unsigned int * label, size_t vals_buffer_size, int reset);
 void print_out(char * msg, int error);
 int file_to_string(char * fname, char * out, size_t str_buf_len);
 int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf);
-int floats_to_csv(char * fname, size_t num_elts, FP_TYPE * data);
+int floats_to_csv(char * fname, size_t data_buf_size, FP_TYPE * data);
 size_t file_size(char * fname);
 
 int start_timing(int task);

@@ -160,7 +160,7 @@ void print_error_message(sgx_status_t ret)
  *   Step 2: call sgx_create_enclave to initialize an enclave instance
  *   Step 3: save the launch token if it is updated
  */
-int initialize_enclave(void)
+int initialize_enclave(int debug)
 {
     char token_path[MAX_PATH] = {'\0'};
     sgx_launch_token_t token = {0};
@@ -199,8 +199,8 @@ int initialize_enclave(void)
         }
     }
     /* Step 2: call sgx_create_enclave to initialize an enclave instance */
-    /* Debug Support: set 2nd parameter to 1 */
-    ret = sgx_create_enclave(ENCLAVE_FILENAME, 1, &token, &updated, &global_eid, NULL);
+    /* Debug Support: set 2nd parameter (JST I think originally SGX_DEBUG_FLAG) to 1 */
+    ret = sgx_create_enclave(ENCLAVE_FILENAME, debug, &token, &updated, &global_eid, NULL);
     if (ret != SGX_SUCCESS) {
         print_error_message(ret);
         if (fp != NULL) fclose(fp);
@@ -246,9 +246,10 @@ int main(int argc, char ** argv){
   char * weights_outfile = NULL;
   int verbose = 0;
   int backprop = 0;
+  int debug = 0;
 
   char c;
-  while((c = getopt(argc, argv, "s:c:i:o:vw:b")) != -1){
+  while((c = getopt(argc, argv, "s:c:i:o:vw:bg")) != -1){
     switch(c){
       case 'v':{
         verbose += 1;
@@ -278,6 +279,10 @@ int main(int argc, char ** argv){
         backprop = 1;
         break;
       }
+      case 'g':{
+        debug = 1;
+        break;
+      }
       default:{
         fprintf(stderr, "ERROR: unrecognized argument %c\n", c);
         return 0;
@@ -292,14 +297,15 @@ int main(int argc, char ** argv){
 #ifndef NENCLAVE  
   
   /* Initialize the enclave */
-  if(initialize_enclave() < 0){
+  if(initialize_enclave(debug) < 0){
       fprintf(stderr, "Enclave initialization FAILED, exiting\n");
       return -1; 
   }
   else if (verbose >= 2){
     cout << "Successfully initialized enclave" << endl;
   }
-  
+#else
+  debug = debug; //Remove unused-variable warning 
 #endif  
 
 #ifdef NENCLAVE
