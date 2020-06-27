@@ -100,11 +100,13 @@ int close_streams(){
 
 
 
-int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_t num_vals, int reset = 0){
+int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_t vals_buffer_size, int reset = 0){
   static std::ifstream ifs(csv_filename);
 
+  assert(vals_buffer_size % sizeof(FP_TYPE) == 0);
+
   if(vals == NULL){
-    vals = (FP_TYPE *) malloc(sizeof(FP_TYPE)*num_vals);
+    vals = (FP_TYPE *) malloc(vals_buffer_size);
   }
   if(label == NULL){
     label = (unsigned int *) malloc(sizeof(unsigned int));
@@ -119,7 +121,7 @@ int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_
     return 1;
   }
   char comma_holder;
-  for(unsigned int i = 0; i < num_vals; i++){
+  for(unsigned int i = 0; i < vals_buffer_size/sizeof(FP_TYPE); i++){
     ifs >> vals[i] >> comma_holder;
     //Normalize
     vals[i] /= (1 << CHAR_BIT);
@@ -140,11 +142,12 @@ void print_out(char * msg, int error){
   }
 }
 
-int floats_to_csv(char * fname, size_t num_elts, FP_TYPE * data){
+int floats_to_csv(char * fname, size_t data_buf_size, FP_TYPE * data){
   ofstream ofs(fname);
-  for(size_t i = 0; i < num_elts; i++){
+  assert(data_buf_size % sizeof(FP_TYPE) == 0);
+  for(size_t i = 0; i < data_buf_size/sizeof(FP_TYPE); i++){
     ofs << data[i];
-    if(i != num_elts-1){
+    if(i != (data_buf_size/sizeof(FP_TYPE))-1){
       ofs << ',';
     }
   }
@@ -184,16 +187,16 @@ int file_to_string(char * fname, char * out, size_t str_buf_len){
 }
 
 //Assumes a buffer is allocated
-int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf){
-  if(!num_elements){
+int read_weight_file(char * filename, size_t buf_size, FP_TYPE * buf){
+  if(!buf_size){
     return 1;
   }
   FILE * f = fopen(filename, "rb");
   if(!f){
     return 1;
   }
-  long bytes_read = fread(buf, sizeof(FP_TYPE), num_elements, f);
-  if(bytes_read*sizeof(FP_TYPE) != (unsigned long) num_elements){
+  long bytes_read = fread(buf, sizeof(FP_TYPE), buf_size/sizeof(FP_TYPE), f);
+  if(bytes_read*sizeof(FP_TYPE) != (long) buf_size){
     fclose(f);
     return 1;
   }
@@ -206,8 +209,9 @@ int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf){
 //Assumes comma-delimited
 int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
   ifstream fs(filename);
+  assert(bufsize % sizeof(FP_TYPE) == 0);
   if(buf == NULL){
-    buf = (FP_TYPE *) malloc(sizeof(FP_TYPE) * bufsize);
+    buf = (FP_TYPE *) malloc(bufsize);
   }
   char comma_holder;
   for(size_t i = 0; i < bufsize/sizeof(FP_TYPE); i++){

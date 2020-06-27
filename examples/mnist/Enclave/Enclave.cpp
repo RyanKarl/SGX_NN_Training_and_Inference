@@ -894,18 +894,21 @@ int enclave_main(char * network_structure_fname, char * input_csv_filename,
 
     for(unsigned int image_idx = 0; image_idx < num_images_this_batch; image_idx++){
       *data_labels_ptr = num_possible_labels;
+      //*data_labels_ptr = 0;
+
 #ifdef NENCLAVE        
-      if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels, epoch_reset)){
+      if(csv_getline(input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels*sizeof(FP_TYPE), epoch_reset)){
         print_out((char *) &("Failed to read input .csv"[0]), true);
         return 1;
       }
 #else
-      ocall_status = csv_getline(&ocall_ret, input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels, epoch_reset);
+      ocall_status = csv_getline(&ocall_ret, input_csv_filename, image_data_csv_ptr, data_labels_ptr, num_pixels*sizeof(FP_TYPE), epoch_reset);
       if(ocall_ret){
         print_out((char *) &("Failed to read input .csv"[0]), true);
         return 1;
       }
 #endif      
+
       assert(*data_labels_ptr < num_possible_labels);
       epoch_reset = false; //Only reset stream on first go of an epoch  
       

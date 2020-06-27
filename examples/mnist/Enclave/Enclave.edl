@@ -55,7 +55,7 @@ enclave {
         int write_stream([in, size=total_bytes] void * buf, size_t total_bytes);
         int close_streams();
         int csv_getline([in, string] char * input_csv_name,
-[in,out,size=num_vals] float * vals, [in, out, size=1] unsigned int * label,
+[out,size=num_vals] float * vals, [out] unsigned int * label,
 size_t num_vals, int reset);
         void print_out([in, string] char * msg, int error);
         int file_to_string([in, string] char * fname, [out, size=str_buf_len] char * out, size_t str_buf_len);
