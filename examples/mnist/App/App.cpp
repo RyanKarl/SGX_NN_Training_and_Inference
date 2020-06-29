@@ -1,6 +1,9 @@
 //App.cpp
 //Jonathan S. Takeshita, Ryan Karl, Mark Horeni
+//Compile without SGX as:
 //g++ App/App.cpp Enclave/Enclave.cpp -pedantic -Wall  -O3 -o ./app -lm -DNENCLAVE
+//Example run commands:
+//./app -s Master_Arch.txt -c mnist_train.csv -i caster.dat -o enclave_out.dat -v -v -v -b
 //./app -s Master_Arch.txt -c fc1.txt -i dummy_gpu.dat -o enclave_out.dat -v -v
 //Defined first to go before other standard libs
 /*
@@ -196,7 +199,7 @@ int initialize_enclave(void)
         }
     }
     /* Step 2: call sgx_create_enclave to initialize an enclave instance */
-    /* Debug Support: set 2nd parameter to 1 */
+    /* Debug Support: set 2nd parameter (originally SGX_DEBUG_FLAG) to 1 */
     ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &global_eid, NULL);
     if (ret != SGX_SUCCESS) {
         print_error_message(ret);
@@ -232,9 +235,8 @@ int main(int argc, char ** argv){
 #endif
 
   //Temporary method of randomness
-#define SEED 5
+#define SEED 10
   srand(SEED);
-
 
   //i and o are filenames of named pipe
   char * input_pipe_path = NULL;
@@ -244,9 +246,10 @@ int main(int argc, char ** argv){
   char * weights_outfile = NULL;
   int verbose = 0;
   int backprop = 0;
+  //int debug = 0;
 
   char c;
-  while((c = getopt(argc, argv, "s:c:i:o:vw:b")) != -1){
+  while((c = getopt(argc, argv, "s:c:i:o:vw:bg")) != -1){
     switch(c){
       case 'v':{
         verbose += 1;
@@ -276,6 +279,12 @@ int main(int argc, char ** argv){
         backprop = 1;
         break;
       }
+/*
+      case 'g':{
+        debug = 1;
+        break;
+      }
+*/
       default:{
         fprintf(stderr, "ERROR: unrecognized argument %c\n", c);
         return 0;
@@ -283,7 +292,7 @@ int main(int argc, char ** argv){
     }
   }
   
-  if(verbose){
+  if(verbose >= 2){
     cout << "Args parsed" << endl;
   }
   
@@ -294,10 +303,9 @@ int main(int argc, char ** argv){
       fprintf(stderr, "Enclave initialization FAILED, exiting\n");
       return -1; 
   }
-  else if (verbose){
+  else if (verbose >= 2){
     cout << "Successfully initialized enclave" << endl;
   }
-  
 #endif  
 
 #ifdef NENCLAVE
@@ -310,11 +318,13 @@ int main(int argc, char ** argv){
     network_structure_fname, input_csv_filename, input_pipe_path, output_pipe_path, weights_outfile, backprop, verbose); 
 #endif  
 
-  if(verbose){
+  if(verbose >= 2){
     cout << "Enclave returned " << enclave_result << endl;
   }
   
-    
+  if(verbose >= 1){
+    print_timings(std::cout);
+  }  
   
   /* Destroy the enclave */
 #ifndef NENCLAVE  

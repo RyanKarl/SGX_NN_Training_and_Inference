@@ -55,15 +55,19 @@ enclave {
         int write_stream([in, size=total_bytes] void * buf, size_t total_bytes);
         int close_streams();
         int csv_getline([in, string] char * input_csv_name,
-[in,out,size=num_vals] double * vals, [in, out, size=1] unsigned int * label, size_t num_vals);
+[out,size=vals_buffer_size] float * vals, [out] unsigned int * label,
+size_t vals_buffer_size, int reset);
         void print_out([in, string] char * msg, int error);
         int file_to_string([in, string] char * fname, [out, size=str_buf_len] char * out, size_t str_buf_len);
         int read_weight_file([in, string] char * filename, size_t
-num_elements, [out, size=num_elements] double * buf);
+num_elements, [out, size=num_elements] float * buf);
         int read_weight_file_plain([in, string] char * filename, size_t
-bufsize, [out, size=bufsize] double * buf);
-        int floats_to_csv([in, string] char * fname, size_t num_elts, [in, size=num_elts] double * data);
+bufsize, [out, size=bufsize] float * buf);
+        int floats_to_csv([in, string] char * fname, size_t data_buf_size, [in,
+size=data_buf_size] float * data);
         size_t file_size([in, string] char * fname);
+        int start_timing(int task);
+        int finish_timing(int task);
     };
     
 

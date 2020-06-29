@@ -9,20 +9,23 @@ import struct
 import numpy as np
 from subprocess import PIPE
 
+USER = os.environ.get('USER')
 ENCLAVE_EXE_PATH = "./app"
-TMPDIR = "/tmp/"
+TMPDIR = "/tmp/." + USER + '_'
+#TMPDIR = os.path.abspath(TMPDIR)
 #Name is of the writer
 FIFO_NAMES = {"gpu":TMPDIR+"gpu.pipe", "enclave":TMPDIR+"enclave.pipe"}
 INT_BYTES = 4
 
-NP_FLOATYPE = np.float64
-FLOAT_BYTES = 8
+NP_FLOATYPE = np.float32
+FLOAT_BYTES = 4
+# f for float, d for double
+STRUCT_PACK_FMT = 'f'
 
 # endianess
 BYTEORDER = sys.byteorder
 DATA_DIMENSIONS = 3
-# f for float, d for double
-STRUCT_PACK_FMT = 'd'
+
 NUM_MATRICES = 3
 MAT_DIM = 2
 BUFFERING=-1
@@ -30,19 +33,23 @@ BUFFERING=-1
 DO_BACKPROP = True
 
 #Hardcoded names
-INPUT_FILE = 'fc1.txt'
+INPUT_FILE = 'mnist_train.csv'
 ARCH_FILE = 'Master_Arch.txt'
 LAYER_FILE = 'weights16.txt'
 
 class SPController:
 
   #Initialization does not actually start subprocess
-  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False, use_std_io=False, do_backprop=DO_BACKPROP):
+  def __init__(self, enclave_executable=ENCLAVE_EXE_PATH, pipe_names=FIFO_NAMES, debug=False, use_std_io=False, do_backprop=DO_BACKPROP, GPU = False):
+    self.GPU = GPU
+    if GPU:
+      import torch
     self.pipe_names = pipe_names
     for producer, filepath in self.pipe_names.items():
       #Clear any previous file
       try:
         #os.mkfifo is system call to create pipe
+        #print("FILEPATH: " + filepath)
         os.mkfifo(filepath)
       except FileExistsError as e:
         os.unlink(filepath)
@@ -70,6 +77,9 @@ class SPController:
     #No buffering to force immediate writes
     if not self.use_std_io:
       self.proc = subprocess.Popen(self.args)  
+      if self.proc.poll() is not None:
+        print("ERROR: subprocess ended prematurely, return code is " + str(self.proc.poll()))
+        sys.exit(self.proc.poll())
       self.gpu_pipe_w = open(self.pipe_names["gpu"], 'wb', buffering=BUFFERING)
       self.enclave_pipe_r = open(self.pipe_names["enclave"], 'rb', buffering=BUFFERING)
       if self.debug:
@@ -79,43 +89,6 @@ class SPController:
       self.proc = subprocess.Popen(self.args, stdout=PIPE, stdin=PIPE)  
       self.gpu_pipe_w = self.proc.stdin
       self.enclave_pipe_r = self.proc.stdout
-      
-  #Deprecated    
-  @staticmethod  
-  def validate_and_pack_matrices(input_matrices, raw_bytes=False):
-    if len(input_matrices) != NUM_MATRICES:
-      print("ERROR: Matrix list incorrect: " + len(input_matrices))
-      return None
-      
-    matrix_dims = list()
-    
-    for im in input_matrices:
-      data_shape = im.shape
-      if len(data_shape) != MAT_DIM:
-        print("ERROR: matrix non 2-dimensional")
-        return None 
-      for s in data_shape:
-        matrix_dims.append(s)  
-
-    if len(matrix_dims) != MAT_DIM*NUM_MATRICES:
-      print("ERROR: incorrect number of dimensions: " + str(len(matrix_dims)))
-      return None
-    #b'' is python notation for byte string
-    #Send 3 ints as shape - use nditer to go over array of floats
-    header = b''
-    for dim in matrix_dims:
-      header += dim.to_bytes(INT_BYTES, byteorder=BYTEORDER)  
-    #Packing input data from 3D numpy array to bytes
-    input_data = b''
-    if not raw_bytes:
-      #.pack takes object and puts into bit field
-      #.nditer iterates over multidimensional array in c style i.e. gets raw values
-      for y in input_matrices:
-        input_data += b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in y.flat])
-    else:
-      input_data = np.nditer(input_data, order='C')  
-      
-    return (header, input_data)  
 
   @staticmethod 
   def validate_one_matrix(mat):
@@ -130,7 +103,6 @@ class SPController:
     #WARNING: assumes row-major order
     packed_data = b''.join([struct.pack(STRUCT_PACK_FMT, x) for x in mat.flat])
     return (header, packed_data)
-
 
   def read_matrix_from_enclave(self):
     #Read response header
@@ -177,10 +149,12 @@ class SPController:
     
     #Unpacks bytes into array of floats
     float_resp = np.asarray([struct.unpack(str(num_floats) + STRUCT_PACK_FMT, enclave_response)])
-    return np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)
+    if not self.GPU:
+      return np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)
+    else:
+      return torch.tensor(np.reshape(float_resp, response_sizes).astype(NP_FLOATYPE)).to("cuda:0")
 
   
-  #TODO figure out return vals
   def send_to_enclave(self, mult_result):  
     output_data = SPController.validate_one_matrix(mult_result.astype(NP_FLOATYPE))
     if output_data is None:
@@ -306,7 +280,6 @@ class SPController:
     return True if self.proc.poll() is None else False     
     
 #An example of how to use the SubProcess Controller
-#TODO strip out using std. IO
 def main():
 
   outfile_name = None
@@ -317,7 +290,7 @@ def main():
     fout = open(outfile_name, 'wb', buffering=BUFFERING)
   
   #initializes SPController
-  spc = SPController(debug=False)
+  spc = SPController(debug=False, GPU=False)
 
   spc.start(verbose=3)
   

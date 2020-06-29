@@ -1,2 +1,0 @@
-DeliveryName	InstallName	FileCheckSum	FileFeature	FileOwner
-<deliverydir>/common/inc/sgx_uae_launch.h	<installdir>/include/sgx_uae_launch.h	0	main	STP

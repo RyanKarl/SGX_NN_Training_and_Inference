@@ -15,7 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-//#include <libexplain/libexplain.h>
+#include <chrono>
 
 #include "../Enclave/Enclave_Defines.h"
 
@@ -26,6 +26,7 @@ using std::ofstream;
 using std::cout;
 using std::cerr;
 using std::endl;
+using namespace std::chrono;
 
 
 static FILE * instream;
@@ -97,18 +98,35 @@ int close_streams(){
 }
 
 
-int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_t num_vals){
+
+
+int csv_getline(char * csv_filename, FP_TYPE * vals, unsigned int * label, size_t vals_buffer_size, int reset = 0){
   static std::ifstream ifs(csv_filename);
+
+  assert(vals_buffer_size % sizeof(FP_TYPE) == 0);
+
+  if(vals == NULL){
+    vals = (FP_TYPE *) malloc(vals_buffer_size);
+  }
+  if(label == NULL){
+    label = (unsigned int *) malloc(sizeof(unsigned int));
+  }
+
+  if(reset){
+    ifs.close();
+    ifs.open(csv_filename);
+  }
+
   if(!ifs.good()){
     return 1;
   }
-  
   char comma_holder;
-  for(unsigned int i = 0; i < num_vals; i++){
+  for(unsigned int i = 0; i < vals_buffer_size/sizeof(FP_TYPE); i++){
     ifs >> vals[i] >> comma_holder;
-    //Normalize FP_TYPE value
+    //Normalize
     vals[i] /= (1 << CHAR_BIT);
   }
+  //cout << endl;
   int label_i;
   ifs >> label_i;
   *label = label_i;
@@ -124,11 +142,12 @@ void print_out(char * msg, int error){
   }
 }
 
-int floats_to_csv(char * fname, size_t num_elts, FP_TYPE * data){
+int floats_to_csv(char * fname, size_t data_buf_size, FP_TYPE * data){
   ofstream ofs(fname);
-  for(size_t i = 0; i < num_elts; i++){
+  assert(data_buf_size % sizeof(FP_TYPE) == 0);
+  for(size_t i = 0; i < data_buf_size/sizeof(FP_TYPE); i++){
     ofs << data[i];
-    if(i != num_elts-1){
+    if(i != (data_buf_size/sizeof(FP_TYPE))-1){
       ofs << ',';
     }
   }
@@ -151,11 +170,15 @@ int file_to_string(char * fname, char * out, size_t str_buf_len){
   ifstream network_ifs(fname);
   std::ostringstream oss;
   assert(network_ifs.good());
+
+  if(out == NULL){
+    out = (char *) malloc(sizeof(char) * str_buf_len);
+  }
   
   oss << network_ifs.rdbuf();
 
   unsigned int len = oss.str().size() + 1;
-  if(len >= STRUCTURE_BUFLEN){
+  if(len != str_buf_len){
     return 1;
   }
   strncpy(out, oss.str().c_str(), len);
@@ -164,16 +187,16 @@ int file_to_string(char * fname, char * out, size_t str_buf_len){
 }
 
 //Assumes a buffer is allocated
-int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf){
-  if(!num_elements){
+int read_weight_file(char * filename, size_t buf_size, FP_TYPE * buf){
+  if(!buf_size){
     return 1;
   }
   FILE * f = fopen(filename, "rb");
   if(!f){
     return 1;
   }
-  long bytes_read = fread(buf, sizeof(FP_TYPE), num_elements, f);
-  if(bytes_read*sizeof(FP_TYPE) != (unsigned long) num_elements){
+  long bytes_read = fread(buf, sizeof(FP_TYPE), buf_size/sizeof(FP_TYPE), f);
+  if((unsigned long) bytes_read*sizeof(FP_TYPE) != (unsigned long) buf_size){
     fclose(f);
     return 1;
   }
@@ -186,6 +209,10 @@ int read_weight_file(char * filename, size_t num_elements, FP_TYPE * buf){
 //Assumes comma-delimited
 int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
   ifstream fs(filename);
+  assert(bufsize % sizeof(FP_TYPE) == 0);
+  if(buf == NULL){
+    buf = (FP_TYPE *) malloc(bufsize);
+  }
   char comma_holder;
   for(size_t i = 0; i < bufsize/sizeof(FP_TYPE); i++){
     if(!fs.good()){
@@ -196,6 +223,68 @@ int read_weight_file_plain(char * filename, size_t bufsize, FP_TYPE * buf){
   return 0;
 }
 
+static high_resolution_clock::time_point overall_start;
+static high_resolution_clock::time_point forward_start;
+static high_resolution_clock::time_point backprop_start;
+
+static double overall_duration;
+static std::vector<double> forward_times;
+static std::vector<double> backprop_times;
+
+//Bad programming, but more efficient
+int start_timing(int task){
+  switch(task){
+    case TASK_ALL:{
+      overall_start = high_resolution_clock::now();
+      break;
+    }
+    case TASK_FORWARD:{
+      forward_start = high_resolution_clock::now();
+      break;
+    }
+    case TASK_BACKPROP:{
+      backprop_start = high_resolution_clock::now();
+      break;
+    }
+    default:{
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int finish_timing(int task){
+  high_resolution_clock::time_point end = high_resolution_clock::now();
+  switch(task){
+    case TASK_ALL:{
+      overall_duration = duration_cast<std::chrono::nanoseconds>(end - overall_start).count();
+      break;
+    }
+    case TASK_FORWARD:{
+      forward_times.push_back(duration_cast<std::chrono::nanoseconds>(end - forward_start).count());
+      break;
+    }
+    case TASK_BACKPROP:{
+      backprop_times.push_back(duration_cast<std::chrono::nanoseconds>(end - backprop_start).count());
+      break;
+    }
+    default:{
+      return 1;
+    }
+  }
+  return 0;
+}
+//Not technically an OCALL, but should be in this file to access stored timings
+void print_timings(std::ostream & os){
+  os << "Total_duration: " << overall_duration << endl;
+  for(size_t i = 0; i < forward_times.size(); i++){
+    os << "Forward_pass: " << forward_times[i] << endl;
+  }
+  for(size_t j = 0; j < backprop_times.size(); j++){
+    os << "Backprop: " << backprop_times[j] << endl;
+  }
+  
+}
 
 
 #endif

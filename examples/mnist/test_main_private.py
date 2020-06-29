@@ -12,6 +12,8 @@ from quant import SSE
 
 super_mega_mask = pickle.load(open("mask.p", 'rb')).to("cuda:0") #torch.rand(10000,10000, device = "cuda:0") * 1
 
+#super_mega_mask = torch.zeros(super_mega_mask.shape).to("cuda:0")
+
 #Force Determinism
 torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
@@ -30,7 +32,7 @@ num_epochs = 5
 batch_size = 128
 learning_rate = 2
 
-
+'''
 train = np.loadtxt("mnist_train.csv", skiprows=1, delimiter=',')
 test = np.loadtxt("mnist_test.csv", skiprows=1, delimiter=',')
 
@@ -43,20 +45,17 @@ y_t = torch.tensor(test[:,0])
 train_dataset = torch.utils.data.TensorDataset(x,y)
 test_dataset = torch.utils.data.TensorDataset(x_t,y_t)
 
-
+'''
 
 
 
 
 # MNIST dataset 
-# train_dataset = torchvision.datasets.MNIST(root='../../data', 
-#                                            train=True, 
-#                                            transform=transforms.ToTensor(),  
-#                                            download=True)
+train_dataset = torchvision.datasets.MNIST(root='../../data',                                               train=True, 
+                                            transform=transforms.ToTensor(),  
+                                            download=True)
 
-# test_dataset = torchvision.datasets.MNIST(root='../../data', 
-#                                           train=False, 
-#                                           transform=transforms.ToTensor())
+test_dataset = torchvision.datasets.MNIST(root='../../data',  train=False, transform=transforms.ToTensor())
 
 # Data loader
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, 
@@ -120,7 +119,7 @@ model = NeuralNet(input_size, hidden_size, num_classes).to(device)
 
 
 # Loss and optimizer
-criterion = SSE
+criterion = my_cross_entropy
 optimizer = SGD(model.parameters(), lr=learning_rate, dampening=0, weight_decay=0, nesterov=False)
 
 # Train the model

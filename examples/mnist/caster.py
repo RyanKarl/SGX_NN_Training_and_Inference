@@ -3,101 +3,93 @@ from SPController import SPController
 import numpy as np
 import sys
 
+FILE_OUT = True
+
 spc = SPController(debug=False)
 
-spc.start(verbose=3)
+VERBOSITY = 1 
 
-f = open("caster.dat", "wb")
+spc.start(verbose=VERBOSITY)
 
+if FILE_OUT:
+  f = open("caster.dat", "wb")
 
-layers = 5
+with open("Master_Arch.txt", 'r') as mf:
+  arch = mf.readline()
+  archs = arch.split(' ')
+  EPOCHS = int(archs[-1])
+  num_inputs = int(archs[0])
+  batchsize = int(archs[1])
+  layers = int(archs[3])
+  num_batches = int(num_inputs / batchsize)
+  if (num_inputs % batchsize) != 0:
+    num_batches += 1
+    
+if VERBOSITY >= 2:    
+  print("Epochs: ", EPOCHS)
+  print("Batches: ", num_batches)    
+
 
 activations = [None] * layers
 weights = [None] * layers
 outputs = [None] * layers
 
-for i in range(layers):
-    print("GPU on layer " + str(i+1))
-    if spc.good():
-        a = spc.read_matrix_from_enclave()
-        a = a.astype(np.float64)
-        activations[i] = a
-        print("a received by GPU: " + str(a))
-        #print(a.shape)
-    else:
-        sys.exit(1)
-
-    if spc.good():
-        b = spc.read_matrix_from_enclave()
-        b = b.astype(np.float64)
-        weights[i] = b
-        print("b received by GPU: " + str(b))
-        #print(b.shape)
-    else:
-        sys.exit(1)
-
-    if spc.good():
-        c = (a @ b)
-        print("c calculated by GPU: " + str(c))
-        spc.send_to_enclave(c)
-        outputs[i] = c
-        outdata = spc.validate_one_matrix(c)
-        f.write(outdata[0])
-        f.write(outdata[1])
-        #spc.send_to_enclave((a @ b.t()))
-    else:
-        sys.exit(1)    
-        
-        
-print("GPU starting backprop")        
-        
-for i in range(layers-1)[::-1]: 
-
-  if spc.good():
-    grad_output = spc.read_matrix_from_enclave()
-    print("grad_output at layer " + str(i) + ": " + str(grad_output))
-
-  if grad_output is not None:
-    print("Received grad_output at layer " + str(i))
-  else:
-    print("ERROR receiving grad_output at layer " + str(i))  
-
-  try:
-    d = grad_output @ weights[i].transpose()
-  except:
-    print(type(weights[i]))  
-    print(weights[i].shape)
-    
-  try:  
-    e = grad_output.transpose() @ activations[i]
-  except:
-    print(type(activations[i].shape))  
-
-  if spc.good():
-    spc.send_to_enclave(d)
-    #print("d from GPU: " + str(d))
-    outdata = spc.validate_one_matrix(d)
-    f.write(outdata[0])
-    f.write(outdata[1])  
+def is_zero_mat(arg):
+  for x in np.nditer(arg):
+    if x != 0:
+      return False
+  return True    
     
 
-  if spc.good():
-    spc.send_to_enclave(e)
-    outdata = spc.validate_one_matrix(e)
-    f.write(outdata[0])
-    f.write(outdata[1])    
-    
-  print("Sent d, e at layer " + str(i))   
-    
-  '''
-  if spc.good():
-    spc.send_to_enclave(activations[i])
-    print("Sent activations at layer " + str(i)) 
-  if spc.good():
-    spc.send_to_enclave(weights[i])
-  '''  
+for j in range(EPOCHS):
+  if VERBOSITY >= 2: 
+    print("GPU starting epoch " + str(j))
+  for b_idx in range(num_batches):
+    for i in range(layers):
+          if VERBOSITY >= 2:
+            print("GPU (forward) on batch ", b_idx, ", epoch ", j, ", layer ", i)
+          a = spc.read_matrix_from_enclave()
+            #a = a.astype(np.float64)
+          activations[i] = a
+            #print("a received by GPU: " + str(a)
+            #a_sum = np.sum(a)
+            #print("Sum of a: " + str(a_sum))
+              
+            #print(a.shape)
 
-        
-spc.close(force=False)        
-    
+          b = spc.read_matrix_from_enclave()
+          weights[i] = b
+       
+          c = (a @ b)
+          spc.send_to_enclave(c)
+          if FILE_OUT:
+            outdata = spc.validate_one_matrix(c)
+            f.write(outdata[0])
+            f.write(outdata[1])
+          outputs[i] = c
+          
+    for i in range(layers-1)[::-1]: 
+      if VERBOSITY >= 2:
+        print("GPU (backwards) on batch ", b_idx, ", epoch ", j, ", layer ", i)
+      grad_output = spc.read_matrix_from_enclave()
+      d = grad_output @ weights[i].transpose()
+         
+      e = grad_output.transpose() @ activations[i]
 
+      spc.send_to_enclave(d)
+
+      spc.send_to_enclave(e)
+      
+      if FILE_OUT:
+        d_out = spc.validate_one_matrix(d)
+        f.write(d_out[0])
+        f.write(d_out[1])
+        e_out = spc.validate_one_matrix(e)
+        f.write(e_out[0])
+        f.write(e_out[1])
+
+if VERBOSITY >= 2:
+  print("GPU finished, waiting on enclave")          
+spc.close(force=False)
+if VERBOSITY >= 2:
+  print("Enclave finished")
