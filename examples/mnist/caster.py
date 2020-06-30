@@ -7,7 +7,7 @@ FILE_OUT = True
 
 spc = SPController(debug=False)
 
-VERBOSITY = 1
+VERBOSITY = 1 
 
 spc.start(verbose=VERBOSITY)
 
@@ -90,4 +90,6 @@ for j in range(EPOCHS):
 
 if VERBOSITY >= 2:
   print("GPU finished, waiting on enclave")          
-spc.close(force=False)        
+spc.close(force=False)
+if VERBOSITY >= 2:
+  print("Enclave finished")
