@@ -27,12 +27,12 @@
 int enclave_main(unsigned int n, unsigned int s){
   float * data = NULL;
   size_t hash_result = 0;
+  data = (float *) malloc(s);
 #ifndef NENCLAVE
   sgx_status_t ocall_status;
 #endif  
   assert(!(s % sizeof(float)));
   for(unsigned int i = 0; i < n; i++){
-    data = (float *) malloc(s);
     data[0] = hash_result;
     //Start timing
 #ifndef NENCLAVE
@@ -54,9 +54,9 @@ int enclave_main(unsigned int n, unsigned int s){
 #else
     finish_timing();
 #endif    
-    free(data);
-    data = NULL;
   }
+  free(data);
+  data = NULL;
 
   return 0;
 }
